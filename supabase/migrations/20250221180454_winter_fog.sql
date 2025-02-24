@@ -1,28 +1,5 @@
-/*
-  # Update environmental news feed
-
-  1. Changes
-    - Remove defunct ENN feed
-    - Add The Guardian's Environment feed
-*/
-
-DO $$
-BEGIN
-  -- Remove the defunct ENN feed
-  DELETE FROM public.rss_feeds
-  WHERE name = 'Environmental News Network';
-
-  -- Add The Guardian Environment feed
-  IF NOT EXISTS (
-    SELECT 1 FROM public.rss_feeds WHERE url = 'https://www.theguardian.com/environment/rss'
-  ) THEN
-    INSERT INTO public.rss_feeds (name, url, topic_id, icon_url)
-    SELECT 
-      'The Guardian Environment',
-      'https://www.theguardian.com/environment/rss',
-      topics.id,
-      'https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?w=100'
-    FROM public.topics 
-    WHERE name = 'Environment';
-  END IF;
-END $$;
+\n\nDO $$\nBEGIN\n  -- Remove the defunct ENN feed\n  DELETE FROM public.rss_feeds\n  WHERE name = 'Environmental News Network';
+\n\n  -- Add The Guardian Environment feed\n  IF NOT EXISTS (\n    SELECT 1 FROM public.rss_feeds WHERE url = 'https://www.theguardian.com/environment/rss'\n  ) THEN\n    INSERT INTO public.rss_feeds (name, url, topic_id, icon_url)\n    SELECT \n      'The Guardian Environment',\n      'https://www.theguardian.com/environment/rss',\n      topics.id,\n      'https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?w=100'\n    FROM public.topics \n    WHERE name = 'Environment';
+\n  END IF;
+\nEND $$;
+;

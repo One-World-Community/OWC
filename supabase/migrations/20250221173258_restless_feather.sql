@@ -1,49 +1,12 @@
-/*
-  # Add user defaults and triggers
-
-  1. Changes
-    - Add trigger to create profile when user signs up
-    - Add function to subscribe users to default topics and feeds
-    - Add trigger to subscribe new users to defaults
-*/
-
--- Create a trigger to create a profile when a user signs up
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-  INSERT INTO public.profiles (id, username)
-  VALUES (new.id, new.email);
-  RETURN new;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-CREATE OR REPLACE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-
--- Function to subscribe users to default topics and feeds
-CREATE OR REPLACE FUNCTION public.subscribe_user_to_defaults()
-RETURNS TRIGGER AS $$
-BEGIN
-  -- Subscribe to default topics
-  INSERT INTO public.user_topics (user_id, topic_id)
-  SELECT NEW.id, id
-  FROM public.topics
-  WHERE name IN ('Technology', 'Science', 'Environment')
-  ON CONFLICT DO NOTHING;
-
-  -- Subscribe to default feeds
-  INSERT INTO public.user_feeds (user_id, feed_id)
-  SELECT NEW.id, id
-  FROM public.rss_feeds
-  WHERE name IN ('TechCrunch', 'Environmental News Network', 'Science Daily', 'MIT Technology Review')
-  ON CONFLICT DO NOTHING;
-  
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Create a trigger to subscribe new users to defaults
-CREATE OR REPLACE TRIGGER on_profile_created
-  AFTER INSERT ON public.profiles
-  FOR EACH ROW EXECUTE FUNCTION public.subscribe_user_to_defaults();
+\n\n-- Create a trigger to create a profile when a user signs up\nCREATE OR REPLACE FUNCTION public.handle_new_user()\nRETURNS TRIGGER AS $$\nBEGIN\n  INSERT INTO public.profiles (id, username)\n  VALUES (new.id, new.email);
+\n  RETURN new;
+\nEND;
+\n$$ LANGUAGE plpgsql SECURITY DEFINER;
+\n\nCREATE OR REPLACE TRIGGER on_auth_user_created\n  AFTER INSERT ON auth.users\n  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+\n\n-- Function to subscribe users to default topics and feeds\nCREATE OR REPLACE FUNCTION public.subscribe_user_to_defaults()\nRETURNS TRIGGER AS $$\nBEGIN\n  -- Subscribe to default topics\n  INSERT INTO public.user_topics (user_id, topic_id)\n  SELECT NEW.id, id\n  FROM public.topics\n  WHERE name IN ('Technology', 'Science', 'Environment')\n  ON CONFLICT DO NOTHING;
+\n\n  -- Subscribe to default feeds\n  INSERT INTO public.user_feeds (user_id, feed_id)\n  SELECT NEW.id, id\n  FROM public.rss_feeds\n  WHERE name IN ('TechCrunch', 'Environmental News Network', 'Science Daily', 'MIT Technology Review')\n  ON CONFLICT DO NOTHING;
+\n  \n  RETURN NEW;
+\nEND;
+\n$$ LANGUAGE plpgsql SECURITY DEFINER;
+\n\n-- Create a trigger to subscribe new users to defaults\nCREATE OR REPLACE TRIGGER on_profile_created\n  AFTER INSERT ON public.profiles\n  FOR EACH ROW EXECUTE FUNCTION public.subscribe_user_to_defaults();
+;

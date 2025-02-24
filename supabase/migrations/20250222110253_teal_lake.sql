@@ -1,45 +1,6 @@
-/*
-  # Add event images support
-  
-  1. Changes
-    - Add end_time column to events table
-    - Create event_images storage bucket
-    - Add storage policies for event images
-    - Add image_url column to events table
-*/
-
--- Add end_time to events table
-ALTER TABLE events
-ADD COLUMN IF NOT EXISTS end_time timestamptz;
-
--- Create storage bucket for event images
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('event_images', 'event_images', true)
-ON CONFLICT (id) DO NOTHING;
-
--- Create storage policy to allow authenticated users to upload event images
-CREATE POLICY "Users can upload event images"
-  ON storage.objects
-  FOR INSERT
-  TO authenticated
-  WITH CHECK (
-    bucket_id = 'event_images' AND
-    auth.uid()::text = (storage.foldername(name))[1]
-  );
-
--- Create storage policy to allow users to update their own event images
-CREATE POLICY "Users can update their own event images"
-  ON storage.objects
-  FOR UPDATE
-  TO authenticated
-  USING (
-    bucket_id = 'event_images' AND
-    auth.uid()::text = (storage.foldername(name))[1]
-  );
-
--- Create storage policy to allow public access to event images
-CREATE POLICY "Event images are publicly accessible"
-  ON storage.objects
-  FOR SELECT
-  TO public
-  USING (bucket_id = 'event_images');
+\n\n-- Add end_time to events table\nALTER TABLE events\nADD COLUMN IF NOT EXISTS end_time timestamptz;
+\n\n-- Create storage bucket for event images\nINSERT INTO storage.buckets (id, name, public)\nVALUES ('event_images', 'event_images', true)\nON CONFLICT (id) DO NOTHING;
+\n\n-- Create storage policy to allow authenticated users to upload event images\nCREATE POLICY "Users can upload event images"\n  ON storage.objects\n  FOR INSERT\n  TO authenticated\n  WITH CHECK (\n    bucket_id = 'event_images' AND\n    auth.uid()::text = (storage.foldername(name))[1]\n  );
+\n\n-- Create storage policy to allow users to update their own event images\nCREATE POLICY "Users can update their own event images"\n  ON storage.objects\n  FOR UPDATE\n  TO authenticated\n  USING (\n    bucket_id = 'event_images' AND\n    auth.uid()::text = (storage.foldername(name))[1]\n  );
+\n\n-- Create storage policy to allow public access to event images\nCREATE POLICY "Event images are publicly accessible"\n  ON storage.objects\n  FOR SELECT\n  TO public\n  USING (bucket_id = 'event_images');
+;
