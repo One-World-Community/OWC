@@ -3,13 +3,6 @@ import { supabase } from './supabase';
 import type { RssFeed } from './supabase';
 import { load as cheerioLoad } from 'cheerio';
 
-// CORS proxy URLs - we'll rotate through these to avoid rate limits
-const CORS_PROXIES = [
-  'https://api.allorigins.win/raw?url=',
-  'https://corsproxy.io/?',
-  'https://api.codetabs.com/v1/proxy?quest=',
-];
-
 export type FeedItem = {
   title: string;
   link: string;
@@ -228,21 +221,20 @@ function extractImageUrl(item: Element): string | undefined {
   return undefined;
 }
 
-async function fetchWithCorsProxy(url: string, attempt = 0): Promise<string> {
-  if (attempt >= CORS_PROXIES.length) {
-    throw new Error('Unable to access the URL. Please check if the URL is correct and accessible.');
-  }
-
+async function fetchWithCorsProxy(url: string): Promise<string> {
   try {
-    const proxyUrl = CORS_PROXIES[attempt] + encodeURIComponent(url);
-    const response = await fetch(proxyUrl, {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+    const response = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; OneWorldCommunity/1.0)',
         'Accept': 'application/rss+xml, application/xml, text/xml, */*',
       },
-      // Add timeout to prevent hanging requests
-      signal: AbortSignal.timeout(10000), // 10 second timeout
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -255,9 +247,8 @@ async function fetchWithCorsProxy(url: string, attempt = 0): Promise<string> {
     
     return text;
   } catch (error) {
-    console.warn(`CORS proxy ${CORS_PROXIES[attempt]} failed:`, error);
-    // Try next proxy
-    return fetchWithCorsProxy(url, attempt + 1);
+    console.error(`Failed to fetch ${url}:`, error);
+    throw error;
   }
 }
 
