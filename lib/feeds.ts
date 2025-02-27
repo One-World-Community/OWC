@@ -429,7 +429,7 @@ export async function getUserTopicFeeds(userId: string) {
 
   return userTopics?.map(ut => ({
     topic: ut.topics,
-    feeds: ut.topics.rss_feeds.filter(feed => feed.status === 'active'),
+    feeds: ut.topics.rss_feeds.filter((feed: RssFeed) => feed.status === 'active'),
   })) || [];
 }
 
