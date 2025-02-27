@@ -7,10 +7,12 @@ import { getEventAttendees, isEventOrganizer, rsvpToEvent, openLocationMap } fro
 import { getProfileById } from '../../lib/profiles';
 import { supabase } from '../../lib/supabase';
 import type { Event, Profile } from '../../lib/supabase';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const [event, setEvent] = useState<Event | null>(null);
   const [attendees, setAttendees] = useState<{ id: string; status: string; profile: Profile }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -168,7 +170,14 @@ export default function EventDetailScreen() {
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScrollView 
+      style={[styles.container, { 
+        backgroundColor: colors.background,
+        paddingBottom: insets.bottom,
+        paddingLeft: insets.left,
+        paddingRight: insets.right
+      }]}
+    >
       <Stack.Screen 
         options={{
           title: 'Event Details',

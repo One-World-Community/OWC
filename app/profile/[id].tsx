@@ -7,10 +7,12 @@ import { getProfileById } from '../../lib/profiles';
 import { getEventsCreatedByUser, getEventsAttendingByUser } from '../../lib/profiles';
 import { supabase } from '../../lib/supabase';
 import type { Profile, Event } from '../../lib/supabase';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function UserProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isCurrentUser, setIsCurrentUser] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -56,7 +58,7 @@ export default function UserProfileScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
           Loading profile...
@@ -67,7 +69,7 @@ export default function UserProfileScreen() {
 
   if (!profile) {
     return (
-      <View style={[styles.errorContainer, { backgroundColor: colors.background }]}>
+      <View style={[styles.errorContainer, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <Text style={[styles.errorText, { color: colors.error }]}>
           User not found or has been removed.
         </Text>
@@ -83,7 +85,15 @@ export default function UserProfileScreen() {
   }
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScrollView 
+      style={[styles.container, { 
+        backgroundColor: colors.background,
+        paddingTop: insets.top,
+        paddingBottom: insets.bottom,
+        paddingLeft: insets.left,
+        paddingRight: insets.right
+      }]}
+    >
       <Stack.Screen 
         options={{
           title: isCurrentUser ? 'My Profile' : 'User Profile',
