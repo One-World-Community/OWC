@@ -10,21 +10,7 @@ import { createEvent, uploadEventImage } from '../../lib/events';
 import * as Location from 'expo-location';
 import * as WebBrowser from 'expo-web-browser';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-
-// Conditionally require react-native-maps only on native platforms
-// This will prevent it from being bundled in the web build
-let MapView: any = null;
-let Marker: any = null;
-if (Platform.OS === 'ios' || Platform.OS === 'android') {
-  try {
-    // Wrap in try/catch to prevent errors during build
-    const ReactNativeMaps = require('react-native-maps');
-    MapView = ReactNativeMaps.default;
-    Marker = ReactNativeMaps.Marker;
-  } catch (e) {
-    console.warn('Could not load react-native-maps:', e);
-  }
-}
+import MapModal from '../../components/maps/MapModal';
 
 export default function CreateEventScreen() {
   const { session } = useAuth();
@@ -36,10 +22,6 @@ export default function CreateEventScreen() {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [mapVisible, setMapVisible] = useState(false);
   const [locationSearchText, setLocationSearchText] = useState('');
-  const mapRef = useRef(null);
-  // For web leaflet map
-  const webMapRef = useRef<any>(null);
-  const webMarkerRef = useRef<any>(null);
   
   const [event, setEvent] = useState({
     title: '',
@@ -54,7 +36,7 @@ export default function CreateEventScreen() {
   });
   const [imageUri, setImageUri] = useState<string | null>(null);
   
-  // For mobile map modal
+  // For map region state
   const [mapRegion, setMapRegion] = useState({
     latitude: 18.5204, // Default to Pune, India
     longitude: 73.8567,
@@ -84,145 +66,14 @@ export default function CreateEventScreen() {
     })();
   }, []);
 
-  // Only runs on web to set up the Leaflet map when the modal is visible
-  useEffect(() => {
-    if (Platform.OS !== 'web' || !mapVisible) return;
-
-    const initializeLeafletMap = async () => {
-      try {
-        // Dynamically import Leaflet only on web - handled in a way that works with TypeScript
-        const L = await require('leaflet');
-        await require('leaflet/dist/leaflet.css');
-
-        if (!webMapRef.current) {
-          // If map container doesn't exist yet, wait for it
-          setTimeout(initializeLeafletMap, 100);
-          return;
-        }
-
-        // Create new map or use existing one
-        const map = L.map('web-map-container').setView(
-          event.latitude && event.longitude 
-            ? [event.latitude, event.longitude] 
-            : [mapRegion.latitude, mapRegion.longitude], 
-          13
-        );
-
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
-
-        // Add a marker at the initial position
-        const initialLatLng = event.latitude && event.longitude 
-          ? [event.latitude, event.longitude] 
-          : [mapRegion.latitude, mapRegion.longitude];
-          
-        const marker = L.marker(initialLatLng as [number, number], {
-          draggable: true
-        }).addTo(map);
-        
-        webMarkerRef.current = marker;
-
-        // Get address on marker drag end
-        marker.on('dragend', async function() {
-          const position = marker.getLatLng();
-          try {
-            const response = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.lat}&lon=${position.lng}&zoom=18&addressdetails=1`
-            );
-            const data = await response.json();
-            if (data && data.display_name) {
-              setLocationSearchText(data.display_name);
-            }
-          } catch (err) {
-            console.error('Error getting address:', err);
-          }
-        });
-
-        // Handle map clicks to move marker
-        map.on('click', async function(e: { latlng: { lat: number; lng: number } }) {
-          const { lat, lng } = e.latlng;
-          marker.setLatLng([lat, lng]);
-          
-          try {
-            const response = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
-            );
-            const data = await response.json();
-            if (data && data.display_name) {
-              setLocationSearchText(data.display_name);
-            }
-          } catch (err) {
-            console.error('Error getting address:', err);
-          }
-        });
-
-        // Add search control
-        const searchControl = document.getElementById('web-map-search');
-        if (searchControl) {
-          searchControl.addEventListener('keypress', async function(e: KeyboardEvent) {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              const searchInput = document.getElementById('web-map-search') as HTMLInputElement;
-              const searchTerm = searchInput.value.trim();
-              
-              if (!searchTerm) return;
-              
-              try {
-                const response = await fetch(
-                  `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchTerm)}&limit=1`
-                );
-                const results = await response.json();
-                
-                if (results.length > 0) {
-                  const { lat, lon, display_name } = results[0];
-                  marker.setLatLng([lat, lon]);
-                  map.setView([lat, lon], 16);
-                  setLocationSearchText(display_name);
-                }
-              } catch (err) {
-                console.error('Error searching location:', err);
-              }
-            }
-          });
-        }
-
-        return () => {
-          map.remove();
-        };
-      } catch (error) {
-        console.error('Error initializing Leaflet map:', error);
-      }
-    };
-
-    initializeLeafletMap();
-  }, [mapVisible, Platform.OS, event.latitude, event.longitude]);
-
   const handleLocationSearch = async () => {
     try {
       if (!locationSearchText.trim()) {
         return;
       }
 
-      if (Platform.OS === 'web' && webMarkerRef.current) {
-        // On web, search using Nominatim API directly
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(locationSearchText)}&limit=1`
-        );
-        const results = await response.json();
-        
-        if (results.length > 0) {
-          const { lat, lon, display_name } = results[0];
-          webMarkerRef.current.setLatLng([lat, lon]);
-          
-          if (webMapRef.current) {
-            webMapRef.current.setView([lat, lon], 16);
-          }
-          
-          setLocationSearchText(display_name);
-        } else {
-          setError('Location not found. Please try a different search term.');
-        }
+      if (Platform.OS === 'web') {
+        // Web location search is handled inside the WebMapModal component
         return;
       }
 
@@ -269,65 +120,13 @@ export default function CreateEventScreen() {
     }
   };
 
-  const handleMapPress = async (e: any) => {
-    // Only run on native platforms
-    if (Platform.OS === 'web') return;
-    
-    const { coordinate } = e.nativeEvent;
-    
-    try {
-      // Update the marker position
-      setMapRegion({
-        ...mapRegion,
-        latitude: coordinate.latitude,
-        longitude: coordinate.longitude,
-      });
-      
-      // Reverse geocode to get address
-      const addressResult = await Location.reverseGeocodeAsync({
-        latitude: coordinate.latitude,
-        longitude: coordinate.longitude,
-      });
-      
-      if (addressResult.length > 0) {
-        const address = addressResult[0];
-        const formattedAddress = [
-          address.name,
-          address.street,
-          address.city,
-          address.region,
-          address.country
-        ].filter(Boolean).join(', ');
-        
-        setLocationSearchText(formattedAddress);
-        
-        // Don't update event yet, this happens when map selection is confirmed
-      }
-    } catch (err) {
-      console.error('Error getting address:', err);
-    }
-  };
-
-  const confirmLocationSelection = () => {
-    if (Platform.OS === 'web' && webMarkerRef.current) {
-      // For web, get coordinates from the Leaflet marker
-      const position = webMarkerRef.current.getLatLng();
-      
-      setEvent(prev => ({
-        ...prev,
-        location: locationSearchText,
-        latitude: position.lat,
-        longitude: position.lng,
-      }));
-    } else {
-      // For mobile
-      setEvent(prev => ({
-        ...prev,
-        location: locationSearchText,
-        latitude: mapRegion.latitude,
-        longitude: mapRegion.longitude,
-      }));
-    }
+  const confirmLocationSelection = (location: string, latitude: number, longitude: number) => {
+    setEvent(prev => ({
+      ...prev,
+      location,
+      latitude,
+      longitude,
+    }));
     
     // Close the map modal
     setMapVisible(false);
@@ -494,71 +293,6 @@ export default function CreateEventScreen() {
     );
   };
 
-  // Render native map modal
-  const renderNativeMapModal = () => {
-    if (Platform.OS === 'web' || !MapView) return null;
-    
-    return (
-      <Modal
-        animationType="slide"
-        transparent={false}
-        visible={mapVisible}
-        onRequestClose={() => setMapVisible(false)}>
-        <View style={styles.modalContainer}>
-          <MapView
-            ref={mapRef}
-            style={styles.fullscreenMap}
-            region={mapRegion}
-            onRegionChangeComplete={setMapRegion}
-            onPress={handleMapPress}>
-            <Marker
-              coordinate={{
-                latitude: mapRegion.latitude,
-                longitude: mapRegion.longitude,
-              }}
-              draggable
-              onDragEnd={handleMapPress}
-            />
-          </MapView>
-          
-          {/* Search Bar with Safe Area */}
-          <View style={[styles.searchBarWrapper, { marginTop: insets.top }]}>
-            <View style={styles.floatingSearchContainer}>
-              <TextInput
-                style={[styles.floatingSearchInput, { color: colors.text }]}
-                placeholder="Search for a location"
-                placeholderTextColor={colors.textSecondary}
-                value={locationSearchText}
-                onChangeText={setLocationSearchText}
-                onSubmitEditing={handleLocationSearch}
-                returnKeyType="search"
-              />
-              <TouchableOpacity
-                style={styles.floatingSearchButton}
-                onPress={handleLocationSearch}>
-                <Ionicons name="search" size={20} color={colors.primary} />
-              </TouchableOpacity>
-            </View>
-          </View>
-          
-          {/* Floating Buttons */}
-          <View style={styles.floatingButtonsContainer}>
-            <TouchableOpacity
-              style={[styles.floatingButton, { backgroundColor: colors.error }]}
-              onPress={() => setMapVisible(false)}>
-              <Text style={styles.floatingButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.floatingButton, { backgroundColor: colors.primary }]}
-              onPress={confirmLocationSelection}>
-              <Text style={styles.floatingButtonText}>Confirm</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-    );
-  };
-
   return (
     <ScrollView 
       style={[styles.container, { backgroundColor: colors.background }]}
@@ -700,133 +434,24 @@ export default function CreateEventScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Render native map modal conditionally */}
-      {renderNativeMapModal()}
-
-      {/* Web Map Modal */}
-      {Platform.OS === 'web' && (
-        <Modal
-          animationType="slide"
-          transparent={false}
-          visible={mapVisible}
-          onRequestClose={() => setMapVisible(false)}>
-          <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            backgroundColor: colors.background,
-          }}>
-            <div style={{
-              padding: 16,
-              backgroundColor: colors.card,
-              borderBottomWidth: 1,
-              borderBottomColor: colors.border,
-              borderBottomStyle: 'solid',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-            }}>
-              <div style={{
-                display: 'flex',
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}>
-                <button 
-                  onClick={() => setMapVisible(false)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontSize: 16,
-                    padding: 8,
-                    color: colors.text
-                  }}
-                >
-                  <Ionicons name="close" size={24} color={colors.text} />
-                </button>
-                
-                <span style={{ 
-                  fontSize: 18, 
-                  fontWeight: 600,
-                  color: colors.text
-                }}>
-                  Select Location
-                </span>
-                
-                <button 
-                  onClick={confirmLocationSelection}
-                  style={{
-                    backgroundColor: colors.primary,
-                    border: 'none',
-                    borderRadius: 8,
-                    padding: '8px 16px',
-                    color: colors.card,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Done
-                </button>
-              </div>
-              
-              <div style={{
-                display: 'flex',
-                flexDirection: 'row',
-                alignItems: 'center',
-                backgroundColor: colors.background,
-                borderRadius: 8,
-                padding: 8,
-              }}>
-                <input 
-                  id="web-map-search"
-                  type="text"
-                  placeholder="Search for a location"
-                  value={locationSearchText}
-                  onChange={(e) => setLocationSearchText(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleLocationSearch()}
-                  style={{
-                    flex: 1,
-                    height: 40,
-                    fontSize: 16,
-                    paddingLeft: 8,
-                    border: 'none',
-                    backgroundColor: 'transparent',
-                    color: colors.text,
-                    outline: 'none',
-                  }}
-                />
-                <button 
-                  onClick={handleLocationSearch}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    padding: 8,
-                    cursor: 'pointer',
-                    color: colors.primary,
-                  }}
-                >
-                  <Ionicons name="search" size={20} color={colors.primary} />
-                </button>
-              </div>
-            </div>
-            
-            <div 
-              id="web-map-container" 
-              ref={webMapRef}
-              style={{
-                flex: 1,
-                width: '100%',
-                height: '100%',
-              }}
-            />
-          </div>
-        </Modal>
-      )}
+      {/* Use the platform-specific MapModal component */}
+      <MapModal
+        visible={mapVisible}
+        onClose={() => setMapVisible(false)}
+        onConfirm={confirmLocationSelection}
+        mapRegion={mapRegion}
+        locationSearchText={locationSearchText}
+        setLocationSearchText={setLocationSearchText}
+        colors={colors}
+        // Platform-specific props
+        insets={insets}
+        setMapRegion={setMapRegion}
+        handleLocationSearch={handleLocationSearch}
+        initialCoordinates={event.latitude && event.longitude ? {
+          latitude: event.latitude,
+          longitude: event.longitude
+        } : undefined}
+      />
     </ScrollView>
   );
 }
