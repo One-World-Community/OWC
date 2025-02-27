@@ -6,22 +6,48 @@ import * as ImagePicker from 'expo-image-picker';
 
 export async function uploadEventImage(userId: string, imageUri: string): Promise<string> {
   try {
-    // For web, we need to fetch the file first
-    const response = await fetch(imageUri);
-    const blob = await response.blob();
-    
-    // Upload to Supabase Storage
-    const fileExt = 'jpg';
-    const filePath = `${userId}/${Date.now()}.${fileExt}`;
+    // Generate filename with extension
+    const fileExt = imageUri.split('.').pop() || 'jpg';
+    const fileName = `${Date.now()}.${fileExt}`;
+    const filePath = `${userId}/${fileName}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from('event_images')
-      .upload(filePath, blob, {
-        contentType: 'image/jpeg',
-        upsert: false
+    if (Platform.OS === 'ios') {
+      // For iOS, manipulate the URI directly to avoid blob conversion
+      // Create a FileReader-like workaround using fetch with blob response
+      const fetchResponse = await fetch(imageUri);
+      const fetchBlob = await fetchResponse.blob();
+      
+      // Convert to ArrayBuffer which is safe on iOS
+      const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as ArrayBuffer);
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(fetchBlob);
       });
+      
+      // Upload the ArrayBuffer directly
+      const { error: uploadError } = await supabase.storage
+        .from('event_images')
+        .upload(filePath, new Uint8Array(arrayBuffer), {
+          contentType: `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`,
+          upsert: false
+        });
+        
+      if (uploadError) throw uploadError;
+    } else {
+      // For web and Android, use fetch and blob
+      const response = await fetch(imageUri);
+      const blob = await response.blob();
+      
+      const { error: uploadError } = await supabase.storage
+        .from('event_images')
+        .upload(filePath, blob, {
+          contentType: `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`,
+          upsert: false
+        });
 
-    if (uploadError) throw uploadError;
+      if (uploadError) throw uploadError;
+    }
 
     // Get the public URL
     const { data: { publicUrl } } = supabase.storage
@@ -106,14 +132,34 @@ export async function openLocationMap(event: Event) {
   }
 }
 export async function createEvent(event: Omit<Event, 'id' | 'created_at' | 'updated_at'>) {
-  const { data, error } = await supabase
-    .from('events')
-    .insert(event)
-    .select()
-    .single();
-  
-  if (error) throw error;
-  return data;
+  // Make sure latitude and longitude are properly formatted numbers or null
+  // Prevents potential issues with the location_geom trigger
+  const formattedEvent: Omit<Event, 'id' | 'created_at' | 'updated_at'> = {
+    ...event,
+    latitude: event.latitude ? parseFloat(String(event.latitude)) : null,
+    longitude: event.longitude ? parseFloat(String(event.longitude)) : null,
+    // Ensure image_url is a properly formatted string or null
+    image_url: event.image_url && typeof event.image_url === 'string' ? event.image_url : null
+  };
+
+  // Ensure the location field is a string
+  if (typeof formattedEvent.location !== 'string' || !formattedEvent.location.trim()) {
+    throw new Error('Location must be a valid string');
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('events')
+      .insert(formattedEvent)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('Error creating event:', err);
+    throw err;
+  }
 }
 
 // Get events with RSVP status for the current user

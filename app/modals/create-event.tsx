@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Platform, Image, Modal, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Platform, Image, Modal, Dimensions, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
@@ -191,7 +191,43 @@ export default function CreateEventScreen() {
 
       let image_url = null;
       if (imageUri) {
-        image_url = await uploadEventImage(session.user.id, imageUri);
+        try {
+          // Handle image upload with better error handling
+          image_url = await uploadEventImage(session.user.id, imageUri);
+          console.log('Image uploaded successfully:', image_url);
+        } catch (imageError) {
+          console.error('Failed to upload image:', imageError);
+          // Continue without the image rather than crashing
+          Alert.alert(
+            'Image Upload Failed',
+            'We couldn\'t upload your image, but we can still create your event without it. Would you like to continue?',
+            [
+              {
+                text: 'Cancel',
+                style: 'cancel',
+                onPress: () => setLoading(false)
+              },
+              {
+                text: 'Continue without image',
+                onPress: async () => {
+                  try {
+                    // Create event without image
+                    await createEvent({
+                      ...event,
+                      image_url: null,
+                      created_by: session.user.id,
+                    });
+                    router.back();
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : 'Failed to create event');
+                    setLoading(false);
+                  }
+                }
+              }
+            ]
+          );
+          return; // Stop execution here
+        }
       }
 
       // Create the event
