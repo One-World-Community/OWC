@@ -4,38 +4,60 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type ThemeMode = 'light' | 'dark' | 'system';
 
+export type Theme = {
+  colors: {
+    background: string;
+    card: string;
+    text: string;
+    textSecondary: string;
+    border: string;
+    primary: string;
+    error: string;
+    success: string;
+    warning: string;
+  };
+};
+
 type ThemeContextType = {
   mode: ThemeMode;
   isDark: boolean;
   setMode: (mode: ThemeMode) => void;
-  colors: typeof lightColors;
+  colors: Theme['colors'];
 };
 
-const lightColors = {
-  background: '#f8fafc',
-  card: '#ffffff',
-  text: '#1e293b',
-  textSecondary: '#64748b',
-  border: '#e2e8f0',
-  primary: '#6366f1',
-  error: '#ef4444',
+const lightTheme: Theme = {
+  colors: {
+    background: '#f8fafc',  // slate-50
+    card: '#ffffff',
+    text: '#1e293b',        // slate-800
+    textSecondary: '#64748b', // slate-500
+    border: '#e2e8f0',      // slate-200
+    primary: '#6366f1',     // indigo-500
+    error: '#dc2626',       // red-600
+    success: '#16a34a',     // green-600
+    warning: '#ca8a04',     // yellow-600
+  },
 };
 
-const darkColors = {
-  background: '#0f172a',
-  card: '#1e293b',
-  text: '#f8fafc',
-  textSecondary: '#94a3b8',
-  border: '#334155',
-  primary: '#818cf8',
-  error: '#f87171',
+const darkTheme: Theme = {
+  colors: {
+    background: '#0f172a',  // slate-900
+    card: '#1e293b',        // slate-800
+    text: '#f1f5f9',        // slate-100
+    textSecondary: '#94a3b8', // slate-400
+    border: '#334155',      // slate-700
+    primary: '#818cf8',     // indigo-400
+    error: '#ef4444',       // red-500
+    success: '#22c55e',     // green-500
+    warning: '#eab308',     // yellow-500
+  },
 };
 
 const ThemeContext = createContext<ThemeContextType>({
   mode: 'system',
   isDark: false,
   setMode: () => {},
-  colors: lightColors,
+  colors: lightTheme.colors,
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -67,7 +89,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   };
 
   const isDark = mode === 'dark' || (mode === 'system' && systemColorScheme === 'dark');
-  const colors = isDark ? darkColors : lightColors;
+  const colors = isDark ? darkTheme.colors : lightTheme.colors;
 
   return (
     <ThemeContext.Provider value={{ mode, isDark, setMode: updateMode, colors }}>

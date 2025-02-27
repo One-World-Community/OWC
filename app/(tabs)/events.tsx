@@ -1,19 +1,20 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../lib/theme';
-import { getEvents, openLocationMap } from '../../lib/events';
+import { getEventsWithRSVP, rsvpToEvent, openLocationMap } from '../../lib/events';
 import type { Event } from '../../lib/supabase';
 import * as Location from 'expo-location';
 
 export default function EventsScreen() {
   const { colors } = useTheme();
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events, setEvents] = useState<(Event & { my_rsvp?: { status: string } })[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showMyEventsOnly, setShowMyEventsOnly] = useState(false);
 
   useEffect(() => {
     loadEvents();
@@ -38,11 +39,12 @@ export default function EventsScreen() {
   const loadEvents = async () => {
     try {
       setLoading(true);
-      const fetchedEvents = await getEvents({
+      const fetchedEvents = await getEventsWithRSVP({
         search: searchQuery || undefined,
         latitude: location?.latitude,
         longitude: location?.longitude,
         distance: 50, // 50km radius
+        includeMyRSVPs: showMyEventsOnly,
       });
       setEvents(fetchedEvents);
     } catch (err) {
@@ -59,7 +61,52 @@ export default function EventsScreen() {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [searchQuery, location]);
+  }, [searchQuery, location, showMyEventsOnly]);
+
+  const handleRSVP = async (eventId: string, status: 'attending' | 'maybe' | 'declined') => {
+    try {
+      await rsvpToEvent(eventId, status);
+      // Update the local state to reflect the change
+      setEvents(events.map(event => 
+        event.id === eventId 
+          ? { ...event, my_rsvp: { status } } 
+          : event
+      ));
+      Alert.alert('Success', `You are now ${status} this event.`);
+    } catch (err) {
+      console.error('Failed to RSVP:', err);
+      Alert.alert('Error', 'Failed to RSVP to the event. Please try again.');
+    }
+  };
+
+  const showRSVPOptions = (event: Event) => {
+    Alert.alert(
+      'RSVP to Event',
+      `Would you like to attend "${event.title}"?`,
+      [
+        {
+          text: 'Attending',
+          onPress: () => handleRSVP(event.id, 'attending'),
+        },
+        {
+          text: 'Maybe',
+          onPress: () => handleRSVP(event.id, 'maybe'),
+        },
+        {
+          text: 'Decline',
+          onPress: () => handleRSVP(event.id, 'declined'),
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
+
+  const viewEventDetails = (event: Event) => {
+    router.push(`/event/${event.id}`);
+  };
 
   if (error) {
     return (
@@ -90,12 +137,33 @@ export default function EventsScreen() {
             onChangeText={setSearchQuery}
           />
         </View>
+        
+        <TouchableOpacity 
+          style={[
+            styles.filterButton, 
+            { 
+              backgroundColor: showMyEventsOnly ? colors.primary : colors.background,
+              borderColor: colors.primary
+            }
+          ]}
+          onPress={() => setShowMyEventsOnly(!showMyEventsOnly)}
+        >
+          <Text style={[
+            styles.filterButtonText, 
+            { color: showMyEventsOnly ? colors.card : colors.primary }
+          ]}>
+            {showMyEventsOnly ? 'My Events' : 'All Events'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <FlatList
         data={events}
         renderItem={({ item }) => (
-          <TouchableOpacity style={[styles.eventCard, { backgroundColor: colors.card }]}>
+          <TouchableOpacity 
+            style={[styles.eventCard, { backgroundColor: colors.card }]}
+            onPress={() => viewEventDetails(item)}
+          >
             <View style={styles.eventHeader}>
               <Text style={[styles.eventTitle, { color: colors.text }]}>{item.title}</Text>
               {item.topics && (
@@ -149,9 +217,38 @@ export default function EventsScreen() {
               )}
             </View>
 
-            <TouchableOpacity style={[styles.registerButton, { backgroundColor: colors.primary }]}>
-              <Text style={[styles.registerButtonText, { color: colors.card }]}>Register</Text>
-            </TouchableOpacity>
+            <View style={styles.actionButtonsRow}>
+              {item.my_rsvp?.status ? (
+                <View style={[
+                  styles.rsvpStatus, 
+                  { 
+                    backgroundColor: 
+                      item.my_rsvp.status === 'attending' ? colors.success + '20' :
+                      item.my_rsvp.status === 'maybe' ? colors.warning + '20' :
+                      colors.error + '20'
+                  }
+                ]}>
+                  <Text style={[
+                    styles.rsvpStatusText, 
+                    { 
+                      color: 
+                        item.my_rsvp.status === 'attending' ? colors.success :
+                        item.my_rsvp.status === 'maybe' ? colors.warning :
+                        colors.error
+                    }
+                  ]}>
+                    {item.my_rsvp.status.charAt(0).toUpperCase() + item.my_rsvp.status.slice(1)}
+                  </Text>
+                </View>
+              ) : (
+                <TouchableOpacity 
+                  style={[styles.rsvpButton, { backgroundColor: colors.primary }]}
+                  onPress={() => showRSVPOptions(item)}
+                >
+                  <Text style={[styles.rsvpButtonText, { color: colors.card }]}>RSVP</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </TouchableOpacity>
         )}
         keyExtractor={item => item.id}
@@ -303,5 +400,40 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
+  },
+  filterButton: {
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+  },
+  filterButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  rsvpButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  rsvpButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  rsvpStatus: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  rsvpStatusText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 12,
   },
 });

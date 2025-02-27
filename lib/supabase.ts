@@ -20,3 +20,4 @@ export type Topic = Tables['topics']['Row'];
 export type Profile = Tables['profiles']['Row'];
 export type Event = Tables['events']['Row'];
 export type RssFeed = Tables['rss_feeds']['Row'];
+export type EventRSVP = Tables['event_rsvps']['Row'];
