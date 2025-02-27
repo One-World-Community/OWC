@@ -15,6 +15,7 @@ export default function EventsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showMyEventsOnly, setShowMyEventsOnly] = useState(false);
+  const [useDistanceFilter, setUseDistanceFilter] = useState(true);
 
   useEffect(() => {
     loadEvents();
@@ -41,9 +42,9 @@ export default function EventsScreen() {
       setLoading(true);
       const fetchedEvents = await getEventsWithRSVP({
         search: searchQuery || undefined,
-        latitude: location?.latitude,
-        longitude: location?.longitude,
-        distance: 50, // 50km radius
+        latitude: useDistanceFilter ? location?.latitude : undefined,
+        longitude: useDistanceFilter ? location?.longitude : undefined,
+        distance: useDistanceFilter ? 50 : undefined, // 50km radius when filter is enabled
         includeMyRSVPs: showMyEventsOnly,
       });
       setEvents(fetchedEvents);
@@ -61,7 +62,7 @@ export default function EventsScreen() {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [searchQuery, location, showMyEventsOnly]);
+  }, [searchQuery, location, showMyEventsOnly, useDistanceFilter]);
 
   const handleRSVP = async (eventId: string, status: 'attending' | 'maybe' | 'declined') => {
     try {
@@ -138,23 +139,46 @@ export default function EventsScreen() {
           />
         </View>
         
-        <TouchableOpacity 
-          style={[
-            styles.filterButton, 
-            { 
-              backgroundColor: showMyEventsOnly ? colors.primary : colors.background,
-              borderColor: colors.primary
-            }
-          ]}
-          onPress={() => setShowMyEventsOnly(!showMyEventsOnly)}
-        >
-          <Text style={[
-            styles.filterButtonText, 
-            { color: showMyEventsOnly ? colors.card : colors.primary }
-          ]}>
-            {showMyEventsOnly ? 'My Events' : 'All Events'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.filterButtonsRow}>
+          <TouchableOpacity 
+            style={[
+              styles.filterButton, 
+              { 
+                backgroundColor: showMyEventsOnly ? colors.primary : colors.background,
+                borderColor: colors.primary
+              }
+            ]}
+            onPress={() => setShowMyEventsOnly(!showMyEventsOnly)}
+          >
+            <Text style={[
+              styles.filterButtonText, 
+              { color: showMyEventsOnly ? colors.card : colors.primary }
+            ]}>
+              {showMyEventsOnly ? 'My Events' : 'All Events'}
+            </Text>
+          </TouchableOpacity>
+
+          {location && (
+            <TouchableOpacity 
+              style={[
+                styles.filterButton, 
+                { 
+                  backgroundColor: useDistanceFilter ? colors.primary : colors.background,
+                  borderColor: colors.primary,
+                  marginLeft: 8
+                }
+              ]}
+              onPress={() => setUseDistanceFilter(!useDistanceFilter)}
+            >
+              <Text style={[
+                styles.filterButtonText, 
+                { color: useDistanceFilter ? colors.card : colors.primary }
+              ]}>
+                {useDistanceFilter ? 'Nearby' : 'Everywhere'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <FlatList
@@ -412,6 +436,10 @@ const styles = StyleSheet.create({
   filterButtonText: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  filterButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   rsvpButton: {
     paddingHorizontal: 16,
