@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "OWC",
+    "name": "One World Community",
     "slug": "one-world-community",
     "owner": "one-world-community",
     "version": "1.0.0",
@@ -23,8 +23,8 @@
       "bundler": "metro",
       "output": "single",
       "favicon": "./assets/images/favicon.png",
-      "name": "OWC",
-      "shortName": "OWC",
+      "name": "One World Community",
+      "shortName": "One World Community",
       "description": "Explore your interests with the One World Community",
       "lang": "en",
       "themeColor": "#6366f1",
