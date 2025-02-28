@@ -58,6 +58,10 @@ export default function SubscriptionsScreen() {
     }
   };
 
+  const handleFeedPress = (feed: RssFeed) => {
+    router.push(`/feeds/${feed.id}`);
+  };
+
   if (error) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -111,7 +115,9 @@ export default function SubscriptionsScreen() {
           data={feeds}
           renderItem={({ item }) => (
             Platform.OS === 'web' ? (
-              <TouchableOpacity style={[styles.feedItem, { backgroundColor: colors.card }]}>
+              <TouchableOpacity 
+                style={[styles.feedItem, { backgroundColor: colors.card }]}
+                onPress={() => handleFeedPress(item)}>
                 <Image source={{ uri: item.icon_url }} style={styles.feedIcon} />
                 <View style={styles.feedInfo}>
                   <Text style={[styles.feedName, { color: colors.text }]}>{item.name}</Text>
@@ -146,7 +152,9 @@ export default function SubscriptionsScreen() {
                     </TouchableOpacity>
                   );
                 }}>
-                <TouchableOpacity style={[styles.feedItem, { backgroundColor: colors.card }]}>
+                <TouchableOpacity 
+                  style={[styles.feedItem, { backgroundColor: colors.card }]}
+                  onPress={() => handleFeedPress(item)}>
                   <Image source={{ uri: item.icon_url }} style={styles.feedIcon} />
                   <View style={styles.feedInfo}>
                     <Text style={[styles.feedName, { color: colors.text }]}>{item.name}</Text>
@@ -172,9 +180,6 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingTop: 16,
-    paddingBottom: 8,
-  },
-  section: {
     marginTop: 24,
   },
   sectionHeader: {
