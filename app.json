@@ -13,7 +13,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.oneworldcommunity.oneworldcommunity",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "This app uses your location to find nearby events and content relevant to your area.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app uses your location to find nearby events and content relevant to your area.",
+        "NSLocationAlwaysUsageDescription": "This app uses your location to find nearby events and content relevant to your area."
       }
     },
     "web": {
