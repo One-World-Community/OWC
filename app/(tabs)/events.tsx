@@ -4,12 +4,18 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../lib/theme';
 import { getEventsWithRSVP, rsvpToEvent, openLocationMap } from '../../lib/events';
-import type { Event } from '../../lib/supabase';
+import type { Event, Topic } from '../../lib/supabase';
 import * as Location from 'expo-location';
+
+// Define an extended Event type that includes the topics property
+type EventWithTopics = Event & { 
+  my_rsvp?: { status: string };
+  topics?: Topic | null;
+};
 
 export default function EventsScreen() {
   const { colors } = useTheme();
-  const [events, setEvents] = useState<(Event & { my_rsvp?: { status: string } })[]>([]);
+  const [events, setEvents] = useState<EventWithTopics[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,7 +86,7 @@ export default function EventsScreen() {
     }
   };
 
-  const showRSVPOptions = (event: Event) => {
+  const showRSVPOptions = (event: EventWithTopics) => {
     Alert.alert(
       'RSVP to Event',
       `Would you like to attend "${event.title}"?`,
@@ -105,7 +111,7 @@ export default function EventsScreen() {
     );
   };
 
-  const viewEventDetails = (event: Event) => {
+  const viewEventDetails = (event: EventWithTopics) => {
     router.push(`/event/${event.id}`);
   };
 
