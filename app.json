@@ -1,7 +1,8 @@
 {
   "expo": {
-    "name": "bolt-expo-nativewind",
-    "slug": "bolt-expo-nativewind",
+    "name": "OWC",
+    "slug": "one-world-community",
+    "owner": "one-world-community",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -15,9 +16,9 @@
       "bundler": "metro",
       "output": "single",
       "favicon": "./assets/images/favicon.png",
-      "name": "One World Community",
-      "shortName": "One World",
-      "description": "Stay connected with global news and events",
+      "name": "OWC",
+      "shortName": "OWC",
+      "description": "Explore your interests with the One World Community",
       "lang": "en",
       "themeColor": "#6366f1",
       "backgroundColor": "#ffffff",
@@ -33,7 +34,9 @@
         }
       ]
     },
-    "plugins": ["expo-router"],
+    "plugins": [
+      "expo-router"
+    ],
     "experiments": {
       "typedRoutes": true
     },
@@ -41,6 +44,14 @@
       "image": "./assets/images/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "88f3d8bc-d3a5-44ec-839f-330f9be4c495"
+      }
     }
   }
 }
