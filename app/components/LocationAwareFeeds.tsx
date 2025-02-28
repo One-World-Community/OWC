@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useTheme } from '../../lib/theme';
 import { getNearbyFeeds } from '../../lib/feeds';
+import { supabase } from '../../lib/supabase';
 
 // Define the type for the feed data
 type LocationFeed = {
@@ -49,7 +50,7 @@ export default function LocationAwareFeeds({
   title = 'Location-Based Feeds',
   category,
   topicId,
-  defaultRadius = 50
+  defaultRadius = 100
 }: LocationAwareFeedsProps) {
   const { colors } = useTheme();
   const [feeds, setFeeds] = useState<LocationFeed[]>([]);
@@ -57,6 +58,8 @@ export default function LocationAwareFeeds({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchRadius, setSearchRadius] = useState(defaultRadius); // km
+  const [isAllDistance, setIsAllDistance] = useState(false);
+  const [locationStatus, setLocationStatus] = useState<'determining' | 'found' | 'error'>('determining');
 
   useEffect(() => {
     requestLocation();
@@ -66,23 +69,69 @@ export default function LocationAwareFeeds({
     if (location) {
       loadNearbyFeeds();
     }
-  }, [location, searchRadius, category, topicId]);
+  }, [location, searchRadius, isAllDistance, category, topicId]);
 
   const requestLocation = async () => {
+    setLocationStatus('determining');
+    
     try {
+      console.log('Requesting location permissions...');
       const { status } = await Location.requestForegroundPermissionsAsync();
+      
       if (status === 'granted') {
-        const userLocation = await Location.getCurrentPositionAsync({});
-        setLocation({
-          latitude: userLocation.coords.latitude,
-          longitude: userLocation.coords.longitude,
-        });
+        console.log('Permission granted, getting current position...');
+        
+        try {
+          // First try to get the current position with a timeout
+          const userLocation = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced, // Less accuracy = faster response
+            timeInterval: 5000 // Only need location every 5 seconds
+          });
+          
+          console.log('Got current position:', userLocation.coords);
+          setLocation({
+            latitude: userLocation.coords.latitude,
+            longitude: userLocation.coords.longitude,
+          });
+          setLocationStatus('found');
+          return;
+        } catch (positionError) {
+          console.warn('Error getting current position:', positionError);
+          
+          // Fall back to last known position if current position fails
+          console.log('Trying to get last known position...');
+          const lastKnownPosition = await Location.getLastKnownPositionAsync();
+          
+          if (lastKnownPosition) {
+            console.log('Using last known position:', lastKnownPosition.coords);
+            setLocation({
+              latitude: lastKnownPosition.coords.latitude,
+              longitude: lastKnownPosition.coords.longitude,
+            });
+            setLocationStatus('found');
+            return;
+          }
+          
+          // If we can't get the last known position either, try using a rough city-level guess
+          console.warn('Could not get last known position, using a fallback');
+          setError('Could not precisely determine your location. Results may not be accurate.');
+          
+          // Fallback to a default central location if everything fails
+          setLocation({
+            latitude: 37.7749, // San Francisco as a reasonable default
+            longitude: -122.4194
+          });
+          setLocationStatus('error');
+        }
       } else {
-        setError('Location permission denied');
+        console.warn('Location permission denied');
+        setError('Location permission denied. Please enable location services to see nearby feeds.');
+        setLocationStatus('error');
       }
     } catch (err) {
-      console.warn('Error getting location:', err);
-      setError('Could not determine your location');
+      console.error('Error in location request:', err);
+      setError('Could not determine your location. Please check your location settings.');
+      setLocationStatus('error');
     }
   };
 
@@ -91,20 +140,78 @@ export default function LocationAwareFeeds({
     
     try {
       setLoading(true);
-      const nearbyFeeds = await getNearbyFeeds({
-        latitude: location.latitude,
-        longitude: location.longitude,
-        radius: searchRadius,
-        category: category,
-        topicId: topicId
-      });
-      setFeeds(nearbyFeeds);
+      console.log(`Loading feeds with: radius=${isAllDistance ? 'All' : searchRadius}, lat=${location.latitude}, lng=${location.longitude}`);
+      
+      if (isAllDistance) {
+        // For "All" option, get all location-aware feeds without distance filtering
+        let query = supabase
+          .from('location_aware_feeds')
+          .select('*');
+        
+        // Only add category filter if category is provided
+        if (category) {
+          query = query.eq('location_category', category);
+        }
+        
+        // Add topic filter if provided
+        if (topicId) {
+          query = query.eq('topic_id', topicId);
+        }
+        
+        const { data: allFeeds, error } = await query;
+        
+        if (error) throw error;
+        console.log(`Got ${allFeeds?.length || 0} feeds, calculating distances...`);
+        
+        // Calculate distances manually for display purposes
+        const feedsWithDistance = allFeeds?.map(feed => {
+          const distance = calculateDistance(
+            location.latitude, 
+            location.longitude, 
+            feed.latitude, 
+            feed.longitude
+          );
+          return { ...feed, distance_km: distance };
+        }).sort((a, b) => a.distance_km - b.distance_km); // Sort by closest first
+        
+        setFeeds(feedsWithDistance || []);
+        console.log(`Set ${feedsWithDistance?.length || 0} feeds sorted by distance`);
+      } else {
+        // Use the standard RPC function for distance-based filtering
+        const nearbyFeeds = await getNearbyFeeds({
+          latitude: location.latitude,
+          longitude: location.longitude,
+          radius: searchRadius,
+          category: category,
+          topicId: topicId
+        });
+        
+        // Make sure we also have distance-based sorting in the near feeds case
+        // (The DB function already sorts by distance, but this ensures consistency)
+        const sortedFeeds = [...nearbyFeeds].sort((a, b) => a.distance_km - b.distance_km);
+        
+        setFeeds(sortedFeeds);
+        console.log(`Got ${sortedFeeds?.length || 0} feeds within ${searchRadius}km radius`);
+      }
     } catch (err) {
       console.error('Error loading nearby feeds:', err);
       setError('Failed to load location-based feeds');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Simple distance calculation function using Haversine formula
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
   };
 
   const handleOpenFeed = (feedId: string) => {
@@ -118,34 +225,91 @@ export default function LocationAwareFeeds({
       .join(' ');
   };
 
+  const handleRadiusSelect = (radius: number | null) => {
+    if (radius === null) {
+      setIsAllDistance(true);
+    } else {
+      setSearchRadius(radius);
+      setIsAllDistance(false);
+    }
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.text }]}>
           {title}
         </Text>
-        <View style={styles.radiusSelector}>
-          <Text style={[styles.radiusLabel, { color: colors.textSecondary }]}>
-            Within:
-          </Text>
-          {[25, 50, 100, 250].map((radius) => (
+        
+        {locationStatus === 'determining' && (
+          <View style={styles.locationStatusContainer}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={[styles.locationStatusText, { color: colors.textSecondary }]}>
+              Determining your location...
+            </Text>
+          </View>
+        )}
+        
+        {locationStatus === 'error' && location && (
+          <View style={styles.locationStatusContainer}>
+            <Ionicons name="alert-circle-outline" size={16} color={colors.warning} />
+            <Text style={[styles.locationStatusText, { color: colors.warning }]}>
+              Using approximate location
+            </Text>
+          </View>
+        )}
+        
+        {location && (
+          <View style={styles.radiusSelector}>
+            <Text style={[styles.radiusLabel, { color: colors.textSecondary }]}>
+              Within:
+            </Text>
             <TouchableOpacity
-              key={radius}
               style={[
                 styles.radiusButton,
-                radius === searchRadius && { backgroundColor: colors.primary }
+                (!isAllDistance && searchRadius === 100) && { backgroundColor: colors.primary }
               ]}
-              onPress={() => setSearchRadius(radius)}
+              onPress={() => handleRadiusSelect(100)}
             >
               <Text style={[
                 styles.radiusButtonText,
-                radius === searchRadius ? { color: colors.card } : { color: colors.primary }
+                (!isAllDistance && searchRadius === 100) ? { color: colors.card } : { color: colors.primary }
               ]}>
-                {radius} km
+                100 km
               </Text>
             </TouchableOpacity>
-          ))}
-        </View>
+            
+            <TouchableOpacity
+              style={[
+                styles.radiusButton,
+                (!isAllDistance && searchRadius === 500) && { backgroundColor: colors.primary }
+              ]}
+              onPress={() => handleRadiusSelect(500)}
+            >
+              <Text style={[
+                styles.radiusButtonText,
+                (!isAllDistance && searchRadius === 500) ? { color: colors.card } : { color: colors.primary }
+              ]}>
+                500 km
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[
+                styles.radiusButton,
+                isAllDistance && { backgroundColor: colors.primary }
+              ]}
+              onPress={() => handleRadiusSelect(null)}
+            >
+              <Text style={[
+                styles.radiusButtonText,
+                isAllDistance ? { color: colors.card } : { color: colors.primary }
+              ]}>
+                All
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {error ? (
@@ -241,6 +405,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 8,
+  },
+  locationStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  locationStatusText: {
+    marginLeft: 8,
+    fontSize: 14,
   },
   radiusLabel: {
     marginRight: 8,
