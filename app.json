@@ -60,6 +60,9 @@
       "eas": {
         "projectId": "88f3d8bc-d3a5-44ec-839f-330f9be4c495"
       }
+    },
+    "android": {
+      "package": "com.oneworldcommunity.oneworldcommunity"
     }
   }
 }
