@@ -36,6 +36,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="local"
+        options={{
+          title: 'Local',
+          tabBarIcon: ({ size, color }) => (
+            <Ionicons name="location" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="subscriptions"
         options={{
           title: 'Subscriptions',

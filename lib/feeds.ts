@@ -441,3 +441,41 @@ export async function unsubscribeFeed(userId: string, feedId: string) {
   
   if (error) throw error;
 }
+
+// Function to get feeds near a user's location
+export async function getNearbyFeeds(options: {
+  latitude: number;
+  longitude: number;
+  radius?: number; // in km
+  topicId?: string;
+  category?: string; // 'local_news', 'local_politics', 'community', etc.
+}) {
+  const { latitude, longitude, radius = 50, topicId, category } = options;
+  
+  try {
+    let query = supabase
+      .rpc('get_feeds_near_location', {
+        lat: latitude,
+        lng: longitude,
+        radius_km: radius,
+        category: category
+      });
+    
+    // Filter by topic if provided
+    if (topicId) {
+      query = query.eq('topic_id', topicId);
+    }
+    
+    const { data: feeds, error } = await query;
+    
+    if (error) {
+      console.error('Error fetching nearby feeds:', error);
+      throw error;
+    }
+    
+    return feeds || [];
+  } catch (err) {
+    console.error('Error in getNearbyFeeds:', err);
+    throw err;
+  }
+}
