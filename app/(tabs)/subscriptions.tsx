@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Platform, Animated } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Platform, Animated, ScrollView } from 'react-native';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -77,45 +77,48 @@ export default function SubscriptionsScreen() {
 
   return (
     <GestureHandlerRootView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.section}>
-        <View style={[styles.sectionHeader, { backgroundColor: colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Topics</Text>
-          <TouchableOpacity 
-            style={styles.editButton}
-            onPress={() => router.push('/modals/manage-topics')}>
-            <Ionicons name="settings-outline" size={24} color={colors.primary} />
-          </TouchableOpacity>
-        </View>
-        <FlatList
-          data={topics}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          renderItem={({ item }) => (
-            <TouchableOpacity style={[styles.topicCard, { backgroundColor: colors.card }]}>
-              <Text style={styles.topicIcon}>{item.icon}</Text>
-              <Text style={[styles.topicName, { color: colors.text }]}>{item.name}</Text>
+      <ScrollView 
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}>
+        <View style={styles.section}>
+          <View style={[styles.sectionHeader, { backgroundColor: colors.card }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Topics</Text>
+            <TouchableOpacity 
+              style={styles.editButton}
+              onPress={() => router.push('/modals/manage-topics')}>
+              <Ionicons name="settings-outline" size={24} color={colors.primary} />
             </TouchableOpacity>
-          )}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.topicsList}
-        />
-      </View>
-
-      <View style={styles.section}>
-        <View style={[styles.sectionHeader, { backgroundColor: colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>RSS Feeds</Text>
-          <TouchableOpacity 
-            style={styles.addButton}
-            onPress={() => router.push('/modals/add-feed')}>
-            <Ionicons name="add" size={24} color={colors.primary} />
-          </TouchableOpacity>
+          </View>
+          <FlatList
+            data={topics}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            renderItem={({ item }) => (
+              <TouchableOpacity style={[styles.topicCard, { backgroundColor: colors.card }]}>
+                <Text style={styles.topicIcon}>{item.icon}</Text>
+                <Text style={[styles.topicName, { color: colors.text }]}>{item.name}</Text>
+              </TouchableOpacity>
+            )}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.topicsList}
+          />
         </View>
-        
-        <FlatList
-          data={feeds}
-          renderItem={({ item }) => (
+
+        <View style={styles.section}>
+          <View style={[styles.sectionHeader, { backgroundColor: colors.card }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>RSS Feeds</Text>
+            <TouchableOpacity 
+              style={styles.addButton}
+              onPress={() => router.push('/modals/add-feed')}>
+              <Ionicons name="add" size={24} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
+          
+          {feeds.map(item => (
             Platform.OS === 'web' ? (
               <TouchableOpacity 
+                key={item.id}
                 style={[styles.feedItem, { backgroundColor: colors.card }]}
                 onPress={() => handleFeedPress(item)}>
                 <Image source={{ uri: item.icon_url }} style={styles.feedIcon} />
@@ -131,6 +134,7 @@ export default function SubscriptionsScreen() {
               </TouchableOpacity>
             ) : (
               <Swipeable
+                key={item.id}
                 renderRightActions={(progress, dragX) => {
                   const scale = dragX.interpolate({
                     inputRange: [-100, 0],
@@ -163,13 +167,26 @@ export default function SubscriptionsScreen() {
                 </TouchableOpacity>
               </Swipeable>
             )
+          ))}
+          
+          {loading && (
+            <View style={styles.loadingContainer}>
+              <Text style={{ color: colors.textSecondary }}>Loading feeds...</Text>
+            </View>
           )}
-          keyExtractor={item => item.id}
-          contentContainerStyle={{ paddingBottom: 40 }}
-          refreshing={loading}
-          onRefresh={loadSubscriptions}
-        />
-      </View>
+          
+          {!loading && feeds.length === 0 && (
+            <View style={styles.emptyContainer}>
+              <Text style={{ color: colors.textSecondary }}>No feeds subscribed</Text>
+              <TouchableOpacity 
+                style={[styles.emptyButton, { backgroundColor: colors.primary }]}
+                onPress={() => router.push('/modals/add-feed')}>
+                <Text style={{ color: colors.card }}>Add a feed</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </ScrollView>
     </GestureHandlerRootView>
   );
 }
@@ -177,6 +194,12 @@ export default function SubscriptionsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 40,
   },
   section: {
     paddingTop: 16,
@@ -286,5 +309,19 @@ const styles = StyleSheet.create({
   retryButtonText: {
     fontSize: 16,
     fontWeight: '500',
+  },
+  loadingContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  emptyContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  emptyButton: {
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
 });
