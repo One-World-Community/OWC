@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator, Linking, TextInput } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator, TextInput } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,6 +7,7 @@ import { useTheme } from '../../lib/theme';
 import { fetchFeedItems, type FeedItem } from '../../lib/feeds';
 import { supabase } from '../../lib/supabase';
 import { RssFeed } from '../../lib/supabase';
+import * as WebBrowser from 'expo-web-browser';
 
 export default function FeedDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -68,8 +69,8 @@ export default function FeedDetailScreen() {
     }
   };
 
-  const handleOpenArticle = (link: string) => {
-    Linking.openURL(link);
+  const handleOpenArticle = async (link: string) => {
+    await WebBrowser.openBrowserAsync(link);
   };
 
   const formatDate = (dateStr?: string) => {
@@ -145,7 +146,9 @@ export default function FeedDetailScreen() {
             style={[styles.articleCard, { backgroundColor: colors.card }]}
             onPress={() => handleOpenArticle(item.link)}>
             {item.imageUrl && (
-              <Image source={{ uri: item.imageUrl }} style={styles.articleImage} />
+              <View style={styles.imageContainer}>
+                <Image source={{ uri: item.imageUrl }} style={styles.articleImage} />
+              </View>
             )}
             <View style={styles.articleContent}>
               <Text style={[styles.articleTitle, { color: colors.text }]}>{item.title}</Text>
@@ -245,6 +248,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+  },
+  imageContainer: {
+    justifyContent: 'center',
   },
   articleImage: {
     width: 60,
