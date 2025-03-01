@@ -77,29 +77,103 @@ export default function AddFeedScreen() {
     try {
       const items = await fetchFeedItems({ url: urlToFetch });
       
+      // Handle empty feeds gracefully
       if (items.length === 0) {
-        throw new Error('No feed items found. Please check the URL and try again.');
-      }
-
-      // Extract feed title from the first item if available
-      const suggestedName = items[0].title?.split(' - ')[1] || 
+        setPreviewItems([]);
+        // Try to get website metadata for feed information
+        try {
+          const metadata = await getWebsiteMetadata(urlToFetch);
+          if (metadata.title) {
+            setName(metadata.title);
+          } else {
+            // If no metadata title, try to extract from URL
+            try {
+              const feedUrl = new URL(urlToFetch);
+              setName(feedUrl.hostname.replace('www.', ''));
+            } catch {
+              // If URL parsing fails, use a generic name
+              setName(urlToFetch.split('/')[0] || 'My Feed');
+            }
+          }
+        } catch (metadataErr) {
+          // If metadata fetch fails, use URL for name
+          try {
+            const feedUrl = new URL(urlToFetch);
+            setName(feedUrl.hostname.replace('www.', ''));
+          } catch {
+            setName(urlToFetch.split('/')[0] || 'My Feed');
+          }
+        }
+      } else {
+        // For feeds with items, continue with existing logic
+        // Extract feed title from the first item if available
+        const suggestedName = items[0].title?.split(' - ')[1] || 
                          items[0].title?.split(' | ')[1] ||
                          new URL(urlToFetch).hostname.replace('www.', '');
 
-      setName(suggestedName || '');
-      setPreviewItems(items.slice(0, 5)); // Show first 5 items
-      setError(null);
-
-      // Try to get website metadata for better feed information
-      const metadata = await getWebsiteMetadata(urlToFetch);
-      if (metadata.title) {
-        setName(metadata.title);
+        setName(suggestedName || '');
+        setPreviewItems(items.slice(0, 5)); // Show first 5 items
+        
+        // Try to get website metadata for better feed information
+        try {
+          const metadata = await getWebsiteMetadata(urlToFetch);
+          if (metadata.title) {
+            setName(metadata.title);
+          }
+        } catch (metadataErr) {
+          // Ignore metadata errors for feeds with items
+        }
       }
       
+      setError(null);
       setSelectedFeedUrl(urlToFetch);
     } catch (err) {
-      setError('Unable to read feed. Please check the URL and try again.');
-      setPreviewItems([]);
+      console.error('Feed fetch error:', err);
+      
+      // Try to handle even feeds that might throw errors but are actually valid
+      try {
+        // This is a fallback - try to extract a name from the URL
+        setPreviewItems([]);
+        try {
+          const feedUrl = new URL(urlToFetch);
+          // Check if it contains feed-like segments
+          const isLikelyFeed = urlToFetch.includes('rss') || 
+                               urlToFetch.includes('feed') || 
+                               urlToFetch.includes('atom') ||
+                               urlToFetch.includes('xml');
+          
+          if (isLikelyFeed) {
+            // Looks like a valid feed URL but might be empty or have parsing issues
+            let suggestedName = '';
+            
+            // Try to get name parts from the URL path
+            const pathParts = feedUrl.pathname.split('/').filter(Boolean);
+            if (pathParts.length > 0) {
+              const lastPart = pathParts[pathParts.length - 1];
+              // Clean up the last part (remove .xml, etc)
+              suggestedName = lastPart.replace(/\.(xml|rss|atom)$/i, '');
+            }
+            
+            if (!suggestedName) {
+              suggestedName = feedUrl.hostname.replace('www.', '');
+            }
+            
+            setName(suggestedName);
+            setSelectedFeedUrl(urlToFetch);
+            setError(null); // Clear error for likely feed URLs
+            return;
+          }
+        } catch (urlErr) {
+          // URL parsing failed, continue to show error
+        }
+        
+        // If we got here, it's not a valid feed
+        setError('Unable to read feed. Please check the URL and try again.');
+        setPreviewItems([]);
+      } catch (fallbackErr) {
+        setError('Unable to read feed. Please check the URL and try again.');
+        setPreviewItems([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -110,6 +184,11 @@ export default function AddFeedScreen() {
     
     if (!name.trim()) {
       setError('Please enter a feed name');
+      return;
+    }
+
+    if (!selectedFeedUrl && !url.trim()) {
+      setError('Please enter a feed URL');
       return;
     }
 
@@ -219,55 +298,72 @@ export default function AddFeedScreen() {
           </View>
         )}
 
-        {previewItems.length > 0 && (
-          <>
-            <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Feed Name</Text>
-              <TextInput
-                style={[styles.input, { 
-                  backgroundColor: colors.card,
-                  borderColor: colors.border,
-                  color: colors.text
-                }]}
-                placeholder="Enter a name for this feed"
-                placeholderTextColor={colors.textSecondary}
-                value={name}
-                onChangeText={setName}
-              />
-            </View>
+        {selectedFeedUrl && (
+          <View style={styles.inputGroup}>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Feed Name</Text>
+            <TextInput
+              style={[styles.input, { 
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                color: colors.text
+              }]}
+              placeholder="Enter a name for this feed"
+              placeholderTextColor={colors.textSecondary}
+              value={name}
+              onChangeText={setName}
+            />
+          </View>
+        )}
 
-            <View style={styles.previewContainer}>
-              <Text style={[styles.previewTitle, { color: colors.textSecondary }]}>
-                Preview Articles
-              </Text>
-              {previewItems.map((item, index) => (
-                <View 
-                  key={item.guid || item.link} 
-                  style={[
-                    styles.previewCard,
-                    { 
-                      backgroundColor: colors.card,
-                      borderColor: colors.border
-                    },
-                    index < previewItems.length - 1 && styles.previewCardWithMargin
-                  ]}>
-                  <Text style={[styles.previewItemTitle, { color: colors.text }]} numberOfLines={2}>
-                    {item.title}
+        {previewItems.length > 0 ? (
+          <View style={styles.previewContainer}>
+            <Text style={[styles.previewTitle, { color: colors.textSecondary }]}>
+              Preview Articles
+            </Text>
+            {previewItems.map((item, index) => (
+              <View 
+                key={item.guid || item.link} 
+                style={[
+                  styles.previewCard,
+                  { 
+                    backgroundColor: colors.card,
+                    borderColor: colors.border
+                  },
+                  index < previewItems.length - 1 && styles.previewCardWithMargin
+                ]}>
+                <Text style={[styles.previewItemTitle, { color: colors.text }]} numberOfLines={2}>
+                  {item.title}
+                </Text>
+                {item.contentSnippet && (
+                  <Text style={[styles.previewItemDescription, { color: colors.textSecondary }]} numberOfLines={3}>
+                    {item.contentSnippet}
                   </Text>
-                  {item.contentSnippet && (
-                    <Text style={[styles.previewItemDescription, { color: colors.textSecondary }]} numberOfLines={3}>
-                      {item.contentSnippet}
-                    </Text>
-                  )}
-                  {item.pubDate && (
-                    <Text style={[styles.previewItemDate, { color: colors.textSecondary }]}>
-                      {new Date(item.pubDate).toLocaleDateString()}
-                    </Text>
-                  )}
-                </View>
-              ))}
+                )}
+                {item.pubDate && (
+                  <Text style={[styles.previewItemDate, { color: colors.textSecondary }]}>
+                    {new Date(item.pubDate).toLocaleDateString()}
+                  </Text>
+                )}
+              </View>
+            ))}
+          </View>
+        ) : selectedFeedUrl && (
+          <View style={styles.previewContainer}>
+            <Text style={[styles.previewTitle, { color: colors.textSecondary }]}>
+              Feed Information
+            </Text>
+            <View style={[styles.previewCard, { 
+              backgroundColor: colors.card,
+              borderColor: colors.border 
+            }]}>
+              <View style={styles.emptyFeedMessage}>
+                <Ionicons name="information-circle-outline" size={24} color={colors.textSecondary} style={styles.emptyFeedIcon} />
+                <Text style={[styles.previewItemDescription, { color: colors.textSecondary }]}>
+                  This feed is currently empty. You can still add it and articles will appear when they become available.
+                </Text>
+              </View>
             </View>
-          </>
+          </View>
         )}
 
         {error && (
@@ -434,5 +530,13 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: 40,
+  },
+  emptyFeedMessage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  emptyFeedIcon: {
+    marginBottom: 4,
   },
 });
