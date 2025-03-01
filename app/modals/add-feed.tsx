@@ -127,8 +127,47 @@ export default function AddFeedScreen() {
       
       setError(null);
       setSelectedFeedUrl(urlToFetch);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Feed fetch error:', err);
+      
+      // Check if this is the "No items found" error which should be treated as a valid empty feed
+      if (err.message && (
+          err.message.includes('No items found') || 
+          err.message.includes('empty feed') || 
+          err.message.includes('no items'))) {
+        console.log('Detected valid empty feed');
+        
+        // This is a valid feed, just empty
+        setPreviewItems([]);
+        
+        // Try to extract a name from the URL
+        try {
+          const feedUrl = new URL(urlToFetch);
+          
+          // Try to get name parts from the URL path
+          const pathParts = feedUrl.pathname.split('/').filter(Boolean);
+          let suggestedName = '';
+          
+          if (pathParts.length > 0) {
+            const lastPart = pathParts[pathParts.length - 1];
+            // Clean up the last part (remove .xml, etc)
+            suggestedName = lastPart.replace(/\.(xml|rss|atom)$/i, '');
+          }
+          
+          if (!suggestedName) {
+            suggestedName = feedUrl.hostname.replace('www.', '');
+          }
+          
+          setName(suggestedName);
+        } catch (urlErr) {
+          // If URL parsing fails, use a generic name
+          setName(urlToFetch.split('/')[0] || 'My Feed');
+        }
+        
+        setSelectedFeedUrl(urlToFetch);
+        setError(null); // Clear any error
+        return;
+      }
       
       // Try to handle even feeds that might throw errors but are actually valid
       try {
