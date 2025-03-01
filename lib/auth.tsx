@@ -29,7 +29,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       
       if (!session) {
-        router.replace('/(auth)/sign-in');
+        router.replace('/(auth)/welcome');
       } else {
         router.replace('/(tabs)');
       }
@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       
       if (!session) {
-        router.replace('/(auth)/sign-in');
+        router.replace('/(auth)/welcome');
       } else {
         router.replace('/(tabs)');
       }
