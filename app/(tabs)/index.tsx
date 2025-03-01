@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Platform, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +8,76 @@ import { useTheme } from '../../lib/theme';
 import { getTopics, getUserTopics, subscribeTopic } from '../../lib/topics';
 import { getUserTopicFeeds, getUserFeeds, fetchFeedItems, type FeedItem } from '../../lib/feeds';
 import type { Topic } from '../../lib/supabase';
+
+// Memoized Article Card component
+const ArticleCard = memo(({ 
+  item, 
+  onPress, 
+  colors 
+}: { 
+  item: FeedItem; 
+  onPress: (url: string) => void;
+  colors: any;
+}) => (
+  <TouchableOpacity 
+    style={[styles.articleCard, { backgroundColor: colors.card }]}
+    onPress={() => onPress(item.link)}>
+    {item.imageUrl && (
+      <Image 
+        source={{ uri: item.imageUrl }} 
+        style={styles.articleImage} 
+        resizeMode="cover"
+      />
+    )}
+    <View style={styles.articleContent}>
+      <Text style={[styles.articleTitle, { color: colors.text }]}>
+        {item.title}
+      </Text>
+      {item.contentSnippet ? (
+        <Text style={[styles.articleSnippet, { color: colors.textSecondary }]} numberOfLines={2}>
+          {item.contentSnippet}
+        </Text>
+      ) : null}
+      <View style={styles.articleMeta}>
+        <Text style={[styles.articleDate, { color: colors.textSecondary }]}>
+          {item.pubDate ? new Date(item.pubDate).toLocaleDateString(undefined, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+          }) : 'Date not available'}
+        </Text>
+      </View>
+    </View>
+  </TouchableOpacity>
+));
+
+// Memoized Topic Button component
+const TopicButton = memo(({ 
+  item, 
+  isSelected, 
+  onPress, 
+  colors 
+}: { 
+  item: any; 
+  isSelected: boolean;
+  onPress: () => void;
+  colors: any;
+}) => (
+  <TouchableOpacity
+    style={[
+      styles.topicButton,
+      { backgroundColor: colors.background },
+      isSelected && [styles.topicButtonSelected, { backgroundColor: colors.primary }]
+    ]}
+    onPress={onPress}>
+    <Text style={styles.topicIcon}>{item.icon}</Text>
+    <Text style={[
+      styles.topicText,
+      { color: colors.text },
+      isSelected && styles.topicTextSelected
+    ]}>{item.name}</Text>
+  </TouchableOpacity>
+));
 
 export default function DiscoverScreen() {
   const { session } = useAuth();
@@ -66,26 +136,41 @@ export default function DiscoverScreen() {
         } else {
           // Load feeds from selected topic or all topic feeds
           const topicFeeds = await getUserTopicFeeds(session.user.id);
+          
+          // Safely extract feeds considering the topic structure
           selectedFeeds = topicFeeds
-            .filter(tf => !selectedTopic || selectedTopic === tf.topic.id)
-            .flatMap(tf => tf.feeds);
+            .filter(tf => {
+              // Check if topic exists and has an id, and whether it matches selected topic if one is selected
+              return tf.topic && 
+                     'id' in tf.topic && 
+                     (!selectedTopic || selectedTopic === tf.topic.id);
+            })
+            .flatMap(tf => 'feeds' in tf ? tf.feeds : []);
         }
 
         const allItems: FeedItem[] = [];
         const feedErrors: string[] = [];
 
-        // Load feeds in parallel and handle errors individually
-        const feedPromises = selectedFeeds.map(async (feed) => {
-          try {
-            const items = await fetchFeedItems(feed);
-            allItems.push(...items);
-          } catch (err) {
-            console.error('Error fetching feed', feed.url, ':', err);
-            feedErrors.push(feed.name);
-          }
-        });
-
-        await Promise.all(feedPromises);
+        // Load feeds in smaller batches to improve performance
+        const batchSize = 5;
+        for (let i = 0; i < selectedFeeds.length; i += batchSize) {
+          const batch = selectedFeeds.slice(i, i + batchSize);
+          
+          // Process batch in parallel
+          const batchPromises = batch.map(async (feed) => {
+            try {
+              const items = await fetchFeedItems(feed);
+              return items;
+            } catch (err) {
+              console.error('Error fetching feed', feed.url, ':', err);
+              feedErrors.push(feed.name);
+              return [];
+            }
+          });
+          
+          const batchResults = await Promise.all(batchPromises);
+          batchResults.forEach(items => allItems.push(...items));
+        }
 
         // Sort by date, newest first
         allItems.sort((a, b) => {
@@ -114,7 +199,7 @@ export default function DiscoverScreen() {
     }
   };
 
-  const handleArticlePress = async (url: string) => {
+  const handleArticlePress = useCallback(async (url: string) => {
     try {
       if (Platform.OS === 'web') {
         window.open(url, '_blank', 'noopener,noreferrer');
@@ -124,7 +209,66 @@ export default function DiscoverScreen() {
     } catch (error) {
       console.error('Failed to open article:', error);
     }
-  };
+  }, []);
+
+  const handleTopicPress = useCallback((topicId: string) => {
+    setSelectedTopic(selectedTopic === topicId ? null : topicId);
+    setShowMyFeeds(false);
+    setFeedItems([]);
+  }, [selectedTopic]);
+
+  const handleMyFeedsPress = useCallback(() => {
+    setShowMyFeeds(!showMyFeeds);
+    setSelectedTopic(null);
+    setFeedItems([]);
+  }, [showMyFeeds]);
+
+  // Function to get unique key for each feed item
+  const getItemKey = useCallback((item: FeedItem, index: number) => {
+    // Create a unique hash from the item's properties
+    const parts = [
+      item.guid || item.link,
+      item.isoDate || item.pubDate || '',
+      item.title || '',
+      index.toString()  // Use index as last resort to ensure uniqueness
+    ];
+    return parts.join('_').replace(/[^a-zA-Z0-9-_]/g, '_');
+  }, []);
+
+  // Memoized render functions
+  const renderArticleItem = useCallback(({ item }: { item: FeedItem }) => {
+    return <ArticleCard item={item} onPress={handleArticlePress} colors={colors} />;
+  }, [colors, handleArticlePress]);
+
+  const renderTopicItem = useCallback(({ item }: { item: any }) => {
+    if (item.id === 'add') {
+      return (
+        <TouchableOpacity
+          style={[styles.addTopicButton, { backgroundColor: colors.background }]}
+          onPress={() => router.push('/modals/add-topic')}>
+          <Ionicons name="add" size={24} color={colors.primary} />
+        </TouchableOpacity>
+      );
+    }
+    if (item.id === 'my-feeds') {
+      return (
+        <TopicButton 
+          item={item} 
+          isSelected={showMyFeeds} 
+          onPress={handleMyFeedsPress} 
+          colors={colors} 
+        />
+      );
+    }
+    return (
+      <TopicButton 
+        item={item} 
+        isSelected={selectedTopic === item.id} 
+        onPress={() => handleTopicPress(item.id)} 
+        colors={colors} 
+      />
+    );
+  }, [colors, selectedTopic, showMyFeeds, handleMyFeedsPress, handleTopicPress]);
 
   if (topics.length === 0) {
     return (
@@ -183,59 +327,12 @@ export default function DiscoverScreen() {
           ]}
           horizontal
           showsHorizontalScrollIndicator={false}
-          renderItem={({ item }) => {
-            if (item.id === 'add') {
-              return (
-                <TouchableOpacity
-                  style={[styles.addTopicButton, { backgroundColor: colors.background }]}
-                  onPress={() => router.push('/modals/add-topic')}>
-                  <Ionicons name="add" size={24} color={colors.primary} />
-                </TouchableOpacity>
-              );
-            }
-            if (item.id === 'my-feeds') {
-              return (
-                <TouchableOpacity
-                  style={[
-                    styles.topicButton,
-                    { backgroundColor: colors.background },
-                    showMyFeeds && [styles.topicButtonSelected, { backgroundColor: colors.primary }]
-                  ]}
-                  onPress={() => {
-                    setShowMyFeeds(!showMyFeeds);
-                    setSelectedTopic(null);
-                    setFeedItems([]);
-                  }}>
-                  <Text style={styles.topicIcon}>{item.icon}</Text>
-                  <Text style={[
-                    styles.topicText,
-                    { color: colors.text }
-                  ]}>{item.name}</Text>
-                </TouchableOpacity>
-              );
-            }
-            return (
-              <TouchableOpacity
-                style={[
-                  styles.topicButton,
-                  { backgroundColor: colors.background },
-                  selectedTopic === item.id && [styles.topicButtonSelected, { backgroundColor: colors.primary }]
-                ]}
-                onPress={() => {
-                  setSelectedTopic(selectedTopic === item.id ? null : item.id);
-                  setShowMyFeeds(false);
-                  setFeedItems([]);
-                }}>
-                <Text style={styles.topicIcon}>{item.icon}</Text>
-                <Text style={[
-                  styles.topicText,
-                  { color: colors.text }
-                ]}>{item.name}</Text>
-              </TouchableOpacity>
-            );
-          }}
+          renderItem={renderTopicItem}
           keyExtractor={item => item.id}
           contentContainerStyle={[styles.topicsList, { paddingVertical: 8 }]}
+          initialNumToRender={10}
+          maxToRenderPerBatch={5}
+          windowSize={5}
         />
       </View>
 
@@ -267,44 +364,18 @@ export default function DiscoverScreen() {
               </View>
             ) : null
           }
-          renderItem={({ item }) => (
-            <TouchableOpacity 
-              style={[styles.articleCard, { backgroundColor: colors.card }]}
-              onPress={() => handleArticlePress(item.link)}>
-              {item.imageUrl && (
-                <Image source={{ uri: item.imageUrl }} style={styles.articleImage} />
-              )}
-              <View style={styles.articleContent}>
-                <Text style={[styles.articleTitle, { color: colors.text }]}>
-                  {item.title}
-                </Text>
-                {item.contentSnippet ? (
-                  <Text style={[styles.articleSnippet, { color: colors.textSecondary }]} numberOfLines={2}>
-                    {item.contentSnippet}
-                  </Text>
-                ) : null}
-                <View style={styles.articleMeta}>
-                  <Text style={[styles.articleDate, { color: colors.textSecondary }]}>
-                    {item.pubDate ? new Date(item.pubDate).toLocaleDateString(undefined, {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric'
-                    }) : 'Date not available'}
-                  </Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          )}
-          keyExtractor={item => {
-            // Create a unique hash from the item's properties
-            const parts = [
-              item.guid || item.link,
-              item.isoDate || item.pubDate || '',
-              item.title || '',
-              Math.random().toString(36).slice(2, 7) // Add a random component
-            ];
-            return parts.join('_').replace(/[^a-zA-Z0-9-_]/g, '_');
-          }}
+          renderItem={renderArticleItem}
+          keyExtractor={getItemKey}
+          initialNumToRender={5}
+          maxToRenderPerBatch={5}
+          windowSize={5}
+          removeClippedSubviews={true}
+          updateCellsBatchingPeriod={50}
+          getItemLayout={(data, index) => ({
+            length: 280, // Approximate height of an article card with image
+            offset: 280 * index,
+            index,
+          })}
         />
       )}
     </View>
