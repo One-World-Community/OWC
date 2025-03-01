@@ -25,7 +25,7 @@ export default function SignUpScreen() {
       <View style={[styles.card, { backgroundColor: colors.card }]}>
         <Text style={[styles.title, { color: colors.text }]}>Create Account</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Join One World Community
+          Join OWC Social
         </Text>
 
         {error ? (

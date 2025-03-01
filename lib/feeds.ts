@@ -314,7 +314,7 @@ async function fetchWithCorsProxy(url: string): Promise<string> {
 
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; OneWorldCommunity/1.0)',
+        'User-Agent': 'Mozilla/5.0 (compatible; OWCSocial/1.0)',
         'Accept': 'application/rss+xml, application/xml, text/xml, */*',
       },
       signal: controller.signal,
@@ -516,9 +516,16 @@ export async function getUserTopicFeeds(userId: string) {
 
   return userTopics?.map(ut => {
     const topic = ut.topics;
-    // Make sure topic and rss_feeds exist before accessing
-    const feeds = (topic && Array.isArray(topic.rss_feeds)) 
-      ? topic.rss_feeds.filter((feed: RssFeed) => feed.status === 'active')
+    
+    // Type guard to check if topic has the expected structure
+    const hasRssFeeds = topic && 
+                      typeof topic === 'object' && 
+                      'rss_feeds' in topic && 
+                      Array.isArray(topic.rss_feeds);
+    
+    // Only filter feeds if the topic has rss_feeds property
+    const feeds = hasRssFeeds
+      ? (topic.rss_feeds as RssFeed[]).filter((feed: RssFeed) => feed.status === 'active')
       : [];
     
     return {

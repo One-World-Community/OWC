@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "One World Community",
+    "name": "OWC Social",
     "slug": "one-world-community",
     "owner": "one-world-community",
     "version": "1.0.0",
@@ -23,9 +23,9 @@
       "bundler": "metro",
       "output": "single",
       "favicon": "./assets/images/favicon.png",
-      "name": "One World Community",
-      "shortName": "One World Community",
-      "description": "Explore your interests with the One World Community",
+      "name": "OWC Social",
+      "shortName": "OWC Social",
+      "description": "Explore your interests with OWC Social",
       "lang": "en",
       "themeColor": "#6366f1",
       "backgroundColor": "#ffffff",
