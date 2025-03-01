@@ -352,6 +352,15 @@ function parseFeedItems(doc: Document): FeedItem[] {
     entries = Array.from(atomEntries);
   }
 
+  // Check if this is at least a valid feed structure, even if it has no items
+  const hasChannel = doc.getElementsByTagName('channel').length > 0;
+  const isAtomFeed = doc.getElementsByTagName('feed').length > 0;
+  
+  // If we have a valid feed structure but no items, that's an empty feed (not an error)
+  if (entries.length === 0 && !(hasChannel || isAtomFeed)) {
+    console.warn('Feed structure not recognized. This might not be a valid feed.');
+  }
+
   for (const item of entries) {
     try {
       const title = getElementText(item, 'title');
@@ -420,9 +429,10 @@ export async function fetchFeedItems(feed: RssFeed | { url: string }): Promise<F
     const doc = parseXML(xmlText);
     const items = parseFeedItems(doc);
     
-    if (items.length === 0) {
-      throw new Error('No items found in feed');
-    }
+    // Don't throw an error for empty feeds, they're valid feeds that just don't have items
+    // if (items.length === 0) {
+    //   throw new Error('No items found in feed');
+    // }
     
     // Only update feed status if it's a real feed (has an ID)
     if ('id' in feed) {
@@ -504,10 +514,18 @@ export async function getUserTopicFeeds(userId: string) {
     return [];
   }
 
-  return userTopics?.map(ut => ({
-    topic: ut.topics,
-    feeds: ut.topics.rss_feeds.filter((feed: RssFeed) => feed.status === 'active'),
-  })) || [];
+  return userTopics?.map(ut => {
+    const topic = ut.topics;
+    // Make sure topic and rss_feeds exist before accessing
+    const feeds = (topic && Array.isArray(topic.rss_feeds)) 
+      ? topic.rss_feeds.filter((feed: RssFeed) => feed.status === 'active')
+      : [];
+    
+    return {
+      topic,
+      feeds
+    };
+  }) || [];
 }
 
 export async function subscribeFeed(userId: string, feedId: string) {
