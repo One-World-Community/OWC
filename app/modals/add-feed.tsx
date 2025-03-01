@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, ScrollView, GestureResponderEvent } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/auth';
 import { useTheme } from '../../lib/theme';
+import React from 'react';
 import { fetchFeedItems, discoverFeeds, getWebsiteMetadata, type FeedItem } from '../../lib/feeds';
 import { supabase } from '../../lib/supabase';
 
@@ -17,15 +18,6 @@ export default function AddFeedScreen() {
   const [previewItems, setPreviewItems] = useState<FeedItem[]>([]);
   const [discoveredFeeds, setDiscoveredFeeds] = useState<Array<{ url: string; title?: string }>>([]);
   const [selectedFeedUrl, setSelectedFeedUrl] = useState<string | null>(null);
-
-  const validateUrl = (url: string) => {
-    try {
-      new URL(url);
-      return true;
-    } catch {
-      return false;
-    }
-  };
 
   const handleUrlChange = async (newUrl: string) => {
     setUrl(newUrl);
@@ -64,9 +56,18 @@ export default function AddFeedScreen() {
     }
   };
 
-  const previewFeed = async (feedUrl?: string) => {
-    if (!validateUrl(feedUrl || url)) {
-      setError('Please enter a valid URL');
+  const previewFeed = async (feedUrl?: string | GestureResponderEvent) => {
+    // Handle both direct string calls and touchable onPress events
+    let urlToFetch: string;
+    
+    if (typeof feedUrl === 'string') {
+      urlToFetch = feedUrl;
+    } else {
+      urlToFetch = url;
+    }
+    
+    if (!urlToFetch.trim()) {
+      setError('Please enter a URL');
       return;
     }
 
@@ -74,7 +75,7 @@ export default function AddFeedScreen() {
     setError(null);
     
     try {
-      const items = await fetchFeedItems({ url: feedUrl || url });
+      const items = await fetchFeedItems({ url: urlToFetch });
       
       if (items.length === 0) {
         throw new Error('No feed items found. Please check the URL and try again.');
@@ -83,19 +84,19 @@ export default function AddFeedScreen() {
       // Extract feed title from the first item if available
       const suggestedName = items[0].title?.split(' - ')[1] || 
                          items[0].title?.split(' | ')[1] ||
-                         new URL(feedUrl || url).hostname.replace('www.', '');
+                         new URL(urlToFetch).hostname.replace('www.', '');
 
       setName(suggestedName || '');
       setPreviewItems(items.slice(0, 5)); // Show first 5 items
       setError(null);
 
       // Try to get website metadata for better feed information
-      const metadata = await getWebsiteMetadata(feedUrl || url);
+      const metadata = await getWebsiteMetadata(urlToFetch);
       if (metadata.title) {
         setName(metadata.title);
       }
       
-      setSelectedFeedUrl(feedUrl || url);
+      setSelectedFeedUrl(urlToFetch);
     } catch (err) {
       setError('Unable to read feed. Please check the URL and try again.');
       setPreviewItems([]);
