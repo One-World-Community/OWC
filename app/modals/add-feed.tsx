@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/auth';
 import { useTheme } from '../../lib/theme';
 import React from 'react';
-import { fetchFeedItems, discoverFeeds, getWebsiteMetadata, type FeedItem } from '../../lib/feeds';
+import { fetchFeedItems, discoverFeeds, getWebsiteMetadata, type FeedItem, getFeedMetadata } from '../../lib/feeds';
 import { supabase } from '../../lib/supabase';
 
 export default function AddFeedScreen() {
@@ -75,54 +75,74 @@ export default function AddFeedScreen() {
     setError(null);
     
     try {
+      // Try to get channel-level metadata from the feed first
+      try {
+        const feedMetadata = await getFeedMetadata({ url: urlToFetch });
+        
+        // If we successfully get feed metadata and it has a title, use it
+        if (feedMetadata && feedMetadata.title) {
+          setName(feedMetadata.title);
+        }
+      } catch (metadataErr) {
+        // If we can't get feed metadata, we'll fall back to other methods
+        console.log('Could not get feed channel metadata:', metadataErr);
+      }
+      
       const items = await fetchFeedItems({ url: urlToFetch });
       
       // Handle empty feeds gracefully
       if (items.length === 0) {
         setPreviewItems([]);
-        // Try to get website metadata for feed information
-        try {
-          const metadata = await getWebsiteMetadata(urlToFetch);
-          if (metadata.title) {
-            setName(metadata.title);
-          } else {
-            // If no metadata title, try to extract from URL
+        
+        // If name wasn't set from feed metadata, try website metadata
+        if (!name) {
+          try {
+            const metadata = await getWebsiteMetadata(urlToFetch);
+            if (metadata.title) {
+              setName(metadata.title);
+            } else {
+              // If no metadata title, try to extract from URL
+              try {
+                const feedUrl = new URL(urlToFetch);
+                setName(feedUrl.hostname.replace('www.', ''));
+              } catch {
+                // If URL parsing fails, use a generic name
+                setName(urlToFetch.split('/')[0] || 'My Feed');
+              }
+            }
+          } catch (metadataErr) {
+            // If metadata fetch fails, use URL for name
             try {
               const feedUrl = new URL(urlToFetch);
               setName(feedUrl.hostname.replace('www.', ''));
             } catch {
-              // If URL parsing fails, use a generic name
               setName(urlToFetch.split('/')[0] || 'My Feed');
             }
-          }
-        } catch (metadataErr) {
-          // If metadata fetch fails, use URL for name
-          try {
-            const feedUrl = new URL(urlToFetch);
-            setName(feedUrl.hostname.replace('www.', ''));
-          } catch {
-            setName(urlToFetch.split('/')[0] || 'My Feed');
           }
         }
       } else {
         // For feeds with items, continue with existing logic
-        // Extract feed title from the first item if available
-        const suggestedName = items[0].title?.split(' - ')[1] || 
-                         items[0].title?.split(' | ')[1] ||
-                         new URL(urlToFetch).hostname.replace('www.', '');
+        // Only set name from item if we don't already have one from feed metadata
+        if (!name) {
+          // Extract feed title from the first item if available
+          const suggestedName = items[0].title?.split(' - ')[1] || 
+                           items[0].title?.split(' | ')[1] ||
+                           new URL(urlToFetch).hostname.replace('www.', '');
 
-        setName(suggestedName || '');
-        setPreviewItems(items.slice(0, 5)); // Show first 5 items
-        
-        // Try to get website metadata for better feed information
-        try {
-          const metadata = await getWebsiteMetadata(urlToFetch);
-          if (metadata.title) {
-            setName(metadata.title);
+          setName(suggestedName || '');
+          
+          // Try to get website metadata for better feed information
+          try {
+            const metadata = await getWebsiteMetadata(urlToFetch);
+            if (metadata.title) {
+              setName(metadata.title);
+            }
+          } catch (metadataErr) {
+            // Ignore metadata errors for feeds with items
           }
-        } catch (metadataErr) {
-          // Ignore metadata errors for feeds with items
         }
+        
+        setPreviewItems(items.slice(0, 5)); // Show first 5 items
       }
       
       setError(null);
@@ -140,28 +160,43 @@ export default function AddFeedScreen() {
         // This is a valid feed, just empty
         setPreviewItems([]);
         
-        // Try to extract a name from the URL
-        try {
-          const feedUrl = new URL(urlToFetch);
-          
-          // Try to get name parts from the URL path
-          const pathParts = feedUrl.pathname.split('/').filter(Boolean);
-          let suggestedName = '';
-          
-          if (pathParts.length > 0) {
-            const lastPart = pathParts[pathParts.length - 1];
-            // Clean up the last part (remove .xml, etc)
-            suggestedName = lastPart.replace(/\.(xml|rss|atom)$/i, '');
+        // If name wasn't set from above, try to extract from feed URL
+        if (!name) {
+          try {
+            const feedUrl = new URL(urlToFetch);
+            
+            // Try to get channel title again via metadata
+            try {
+              const feedMetadata = await getFeedMetadata({ url: urlToFetch });
+              if (feedMetadata && feedMetadata.title) {
+                setName(feedMetadata.title);
+              }
+            } catch (metadataErr) {
+              // Continue to URL-based naming if feed metadata fails
+            }
+            
+            // If still no name, extract from URL
+            if (!name) {
+              // Try to get name parts from the URL path
+              const pathParts = feedUrl.pathname.split('/').filter(Boolean);
+              let suggestedName = '';
+              
+              if (pathParts.length > 0) {
+                const lastPart = pathParts[pathParts.length - 1];
+                // Clean up the last part (remove .xml, etc)
+                suggestedName = lastPart.replace(/\.(xml|rss|atom)$/i, '');
+              }
+              
+              if (!suggestedName) {
+                suggestedName = feedUrl.hostname.replace('www.', '');
+              }
+              
+              setName(suggestedName);
+            }
+          } catch (urlErr) {
+            // If URL parsing fails, use a generic name
+            setName(urlToFetch.split('/')[0] || 'My Feed');
           }
-          
-          if (!suggestedName) {
-            suggestedName = feedUrl.hostname.replace('www.', '');
-          }
-          
-          setName(suggestedName);
-        } catch (urlErr) {
-          // If URL parsing fails, use a generic name
-          setName(urlToFetch.split('/')[0] || 'My Feed');
         }
         
         setSelectedFeedUrl(urlToFetch);
@@ -185,16 +220,29 @@ export default function AddFeedScreen() {
             // Looks like a valid feed URL but might be empty or have parsing issues
             let suggestedName = '';
             
-            // Try to get name parts from the URL path
-            const pathParts = feedUrl.pathname.split('/').filter(Boolean);
-            if (pathParts.length > 0) {
-              const lastPart = pathParts[pathParts.length - 1];
-              // Clean up the last part (remove .xml, etc)
-              suggestedName = lastPart.replace(/\.(xml|rss|atom)$/i, '');
+            // Try to get feed metadata one more time
+            try {
+              const feedMetadata = await getFeedMetadata({ url: urlToFetch });
+              if (feedMetadata && feedMetadata.title) {
+                suggestedName = feedMetadata.title;
+              }
+            } catch (metadataErr) {
+              // Continue to URL-based naming if feed metadata fails
             }
             
+            // If still no name, get from URL
             if (!suggestedName) {
-              suggestedName = feedUrl.hostname.replace('www.', '');
+              // Try to get name parts from the URL path
+              const pathParts = feedUrl.pathname.split('/').filter(Boolean);
+              if (pathParts.length > 0) {
+                const lastPart = pathParts[pathParts.length - 1];
+                // Clean up the last part (remove .xml, etc)
+                suggestedName = lastPart.replace(/\.(xml|rss|atom)$/i, '');
+              }
+              
+              if (!suggestedName) {
+                suggestedName = feedUrl.hostname.replace('www.', '');
+              }
             }
             
             setName(suggestedName);

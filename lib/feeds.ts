@@ -15,6 +15,92 @@ export type FeedItem = {
   imageUrl?: string;
 };
 
+export type FeedMetadata = {
+  title?: string;
+  description?: string;
+  link?: string;
+  language?: string;
+  copyright?: string;
+  pubDate?: string;
+  lastBuildDate?: string;
+  generator?: string;
+  managingEditor?: string;
+  webMaster?: string;
+};
+
+// Function to get channel-level metadata from a feed
+export async function getFeedMetadata(feed: { url: string }): Promise<FeedMetadata> {
+  try {
+    const xml = await fetchWithCorsProxy(feed.url);
+    const doc = parseXML(xml);
+    
+    // Get channel element
+    const channelElements = doc.getElementsByTagName('channel');
+    
+    if (channelElements.length === 0) {
+      // Try Atom format if no RSS channel is found
+      return parseAtomFeedMetadata(doc);
+    }
+    
+    const channel = channelElements[0];
+    
+    return {
+      title: getElementText(channel, 'title'),
+      description: getElementText(channel, 'description'),
+      link: getElementText(channel, 'link'),
+      language: getElementText(channel, 'language'),
+      copyright: getElementText(channel, 'copyright'),
+      pubDate: getElementText(channel, 'pubDate'),
+      lastBuildDate: getElementText(channel, 'lastBuildDate'),
+      generator: getElementText(channel, 'generator'),
+      managingEditor: getElementText(channel, 'managingEditor'),
+      webMaster: getElementText(channel, 'webMaster'),
+    };
+  } catch (error) {
+    console.error('Error getting feed metadata:', error);
+    return {};
+  }
+}
+
+// Parse Atom feed metadata
+function parseAtomFeedMetadata(doc: Document): FeedMetadata {
+  try {
+    // For Atom feeds, the feed element is the root
+    const feed = doc.documentElement;
+    
+    if (feed?.tagName !== 'feed') {
+      return {};
+    }
+    
+    return {
+      title: getElementText(feed, 'title'),
+      description: getElementText(feed, 'subtitle') || getElementText(feed, 'summary'),
+      link: getLinkFromAtom(feed),
+      pubDate: getElementText(feed, 'updated'),
+      generator: getElementText(feed, 'generator'),
+    };
+  } catch (error) {
+    console.error('Error parsing Atom feed metadata:', error);
+    return {};
+  }
+}
+
+// Helper to get link from Atom feed
+function getLinkFromAtom(feed: Element): string {
+  const links = feed.getElementsByTagName('link');
+  
+  for (let i = 0; i < links.length; i++) {
+    const rel = links[i].getAttribute('rel');
+    // Prefer self or alternate links
+    if (!rel || rel === 'self' || rel === 'alternate') {
+      const href = links[i].getAttribute('href');
+      if (href) return href;
+    }
+  }
+  
+  return '';
+}
+
 // Function to discover RSS feeds from a webpage
 export async function discoverFeeds(url: string): Promise<Array<{ url: string; title?: string }>> {
   try {
