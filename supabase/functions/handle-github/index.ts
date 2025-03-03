@@ -55,21 +55,32 @@ Deno.serve(async (req) => {
           throw new Error("GitHub client ID not configured")
         }
 
-        const redirectUri = params.redirectUri
+        // Get platform and redirect URI
+        const { redirectUri, platform = 'web' } = params
+        
+        // For mobile, we'll use our callback function as the redirect URI
+        const callbackUrl = platform === 'web' 
+          ? redirectUri 
+          : `${Deno.env.get("SUPABASE_URL")}/functions/v1/github-callback`
+        
         const scopes = ["repo", "user"]
-        const state = crypto.randomUUID() // Generate random state
+        
+        // Generate unique state and encode platform info
+        // Format: {platform}|{random-uuid}
+        const stateUuid = crypto.randomUUID()
+        const state = `${platform}|${stateUuid}`
 
         // Store state temporarily to verify later
         await supabaseAdmin
           .from("auth_states")
           .insert({
-            state,
+            state: stateUuid, // Only store the UUID part
             user_id: user.id,
             created_at: new Date().toISOString(),
-            redirect_uri: redirectUri
+            redirect_uri: redirectUri // Store the original app redirect URI
           })
 
-        const authUrl = `${GITHUB_OAUTH_URL}?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes.join(" "))}&state=${state}`
+        const authUrl = `${GITHUB_OAUTH_URL}?client_id=${clientId}&redirect_uri=${encodeURIComponent(callbackUrl)}&scope=${encodeURIComponent(scopes.join(" "))}&state=${encodeURIComponent(state)}`
         return new Response(
           JSON.stringify({ authUrl }),
           { headers: { "Content-Type": "application/json" } }
@@ -80,11 +91,13 @@ Deno.serve(async (req) => {
         // Exchange code for access token
         const { code, state } = params
         
-        // Verify state
+        // Verify state - we only stored the UUID part without the platform prefix
+        const stateValue = state.includes('|') ? state.split('|')[1] : state
+        
         const { data: stateData, error: stateError } = await supabaseAdmin
           .from("auth_states")
           .select("*")
-          .eq("state", state)
+          .eq("state", stateValue)
           .eq("user_id", user.id)
           .single()
 
@@ -99,7 +112,7 @@ Deno.serve(async (req) => {
         await supabaseAdmin
           .from("auth_states")
           .delete()
-          .eq("state", state)
+          .eq("state", stateValue)
 
         // Exchange code for token
         const clientId = Deno.env.get("GITHUB_CLIENT_ID")
