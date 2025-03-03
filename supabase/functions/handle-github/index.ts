@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
     const { action, params } = await req.json()
 
     switch (action) {
-      case "get-auth-url":
+      case "get-auth-url": {
         // Generate GitHub OAuth URL
         const clientId = Deno.env.get("GITHUB_CLIENT_ID")
         if (!clientId) {
@@ -74,6 +74,7 @@ Deno.serve(async (req) => {
           JSON.stringify({ authUrl }),
           { headers: { "Content-Type": "application/json" } }
         )
+      }
 
       case "exchange-code": {
         // Exchange code for access token
