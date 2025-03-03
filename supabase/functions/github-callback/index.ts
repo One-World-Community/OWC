@@ -136,7 +136,15 @@ Deno.serve(async (req: Request) => {
       console.log("Vault response data:", JSON.stringify(data || {}));
       console.log("Vault response error:", JSON.stringify(accessTokenError || {}));
       
-      if (!data || !data.id) {
+      // Fix for array response: extract the first item if data is an array
+      let tokenId = null;
+      if (Array.isArray(data) && data.length > 0) {
+        console.log("Vault returned an array response, extracting the first item");
+        tokenId = data[0].id;
+        console.log("Extracted token ID:", tokenId);
+      } else if (data && data.id) {
+        tokenId = data.id;
+      } else {
         console.error("Warning: Vault operation succeeded but returned no valid ID");
         console.log("Full vault response:", JSON.stringify(vaultResult));
       }
@@ -157,7 +165,7 @@ Deno.serve(async (req: Request) => {
         }
       }
       
-      accessTokenData = data || { id: null };
+      accessTokenData = { id: tokenId };
     } catch (vaultError) {
       console.error("Unexpected error during vault operation:", vaultError);
       if (platform === 'web') {
@@ -194,15 +202,25 @@ Deno.serve(async (req: Request) => {
         
         const { data: refreshTokenData, error: refreshTokenError } = refreshResult;
         
-        console.log("Refresh token vault response:", refreshTokenData ? "success" : "null", 
-                    "Error:", refreshTokenError || "null");
+        console.log("Refresh token vault response data:", JSON.stringify(refreshTokenData || {}));
+        console.log("Refresh token vault response error:", JSON.stringify(refreshTokenError || {}));
         
         if (refreshTokenError) {
           console.error('Failed to store refresh token in vault:', refreshTokenError);
           console.error('Refresh token error details:', JSON.stringify(refreshTokenError));
           // Continue without refresh token
         } else {
-          refreshTokenId = refreshTokenData.id;
+          // Handle array response for refresh token
+          if (Array.isArray(refreshTokenData) && refreshTokenData.length > 0) {
+            console.log("Refresh token vault returned an array response, extracting the first item");
+            refreshTokenId = refreshTokenData[0].id;
+            console.log("Extracted refresh token ID:", refreshTokenId);
+          } else if (refreshTokenData && refreshTokenData.id) {
+            refreshTokenId = refreshTokenData.id;
+          } else {
+            console.error("Warning: Refresh token vault operation succeeded but returned no valid ID");
+            console.log("Full refresh token vault response:", JSON.stringify(refreshResult));
+          }
         }
       } catch (refreshError) {
         console.error("Unexpected error during refresh token vault operation:", refreshError);
