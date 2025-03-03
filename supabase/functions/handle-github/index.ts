@@ -156,12 +156,15 @@ Deno.serve(async (req: Request) => {
         const { data: githubUser } = await octokit.rest.users.getAuthenticated()
 
         // Store access token in Vault
+        const timestamp = new Date().getTime();
+        const uniqueName = `github_token_${user.id}_${timestamp}`;
+        
         const { data: accessTokenData, error: accessTokenError } = await supabaseAdmin.rpc(
           'vault_insert', 
           { 
             secret: tokenData.access_token,
-            secret_name: `github_token_${user.id}`,
-            description: `GitHub access token for user ${user.id}`
+            secret_name: uniqueName,
+            description: `GitHub access token for user ${user.id} created at ${new Date().toISOString()}`
           }
         )
 
@@ -176,12 +179,15 @@ Deno.serve(async (req: Request) => {
         // Store refresh token in Vault if present
         let refreshTokenId = null
         if (tokenData.refresh_token) {
+          const refreshTimestamp = new Date().getTime();
+          const uniqueRefreshName = `github_refresh_${user.id}_${refreshTimestamp}`;
+          
           const { data: refreshTokenData, error: refreshTokenError } = await supabaseAdmin.rpc(
             'vault_insert', 
             { 
               secret: tokenData.refresh_token,
-              secret_name: `github_refresh_${user.id}`,
-              description: `GitHub refresh token for user ${user.id}`
+              secret_name: uniqueRefreshName,
+              description: `GitHub refresh token for user ${user.id} created at ${new Date().toISOString()}`
             }
           )
 

@@ -110,24 +110,54 @@ Deno.serve(async (req: Request) => {
     console.log(`GitHub user: ${githubUser.login}`);
     
     // Store access token in Vault
-    const { data: accessTokenData, error: accessTokenError } = await supabaseAdmin.rpc(
-      'vault_insert', 
-      { 
+    console.log("Attempting to store access token in vault...");
+    let accessTokenData = null;
+    try {
+      // Create a unique name with timestamp
+      const timestamp = new Date().getTime();
+      const uniqueName = `github_token_${userId}_${timestamp}`;
+      
+      const vaultParams = { 
         secret: tokenData.access_token,
-        secret_name: `github_token_${userId}`,
-        description: `GitHub access token for user ${userId}`
+        secret_name: uniqueName,
+        description: `GitHub access token for user ${userId} created at ${new Date().toISOString()}`
+      };
+      console.log("Vault parameters:", JSON.stringify(vaultParams));
+      
+      const vaultResult = await supabaseAdmin.rpc(
+        'vault_insert', 
+        vaultParams
+      );
+      
+      const { data, error: accessTokenError } = vaultResult;
+      accessTokenData = data;
+      
+      console.log("Vault response:", data || "null", "Error:", accessTokenError || "null");
+      
+      if (accessTokenError) {
+        console.error('Failed to store access token in vault:', accessTokenError);
+        console.error('Error details:', JSON.stringify(accessTokenError));
+        
+        if (platform === 'web') {
+          return new Response(renderErrorPage(`Failed to securely store access token: ${accessTokenError.message || JSON.stringify(accessTokenError)}`), { 
+            headers: { ...corsHeaders, "Content-Type": "text/html" }
+          });
+        } else {
+          return new Response(
+            JSON.stringify({ error: `Failed to securely store access token: ${accessTokenError.message || JSON.stringify(accessTokenError)}` }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
       }
-    );
-    
-    if (accessTokenError) {
-      console.error('Failed to store access token in vault:', accessTokenError);
+    } catch (vaultError) {
+      console.error("Unexpected error during vault operation:", vaultError);
       if (platform === 'web') {
-        return new Response(renderErrorPage('Failed to securely store access token: ' + accessTokenError.message), { 
+        return new Response(renderErrorPage(`Vault operation failed: ${vaultError instanceof Error ? vaultError.message : String(vaultError)}`), { 
           headers: { ...corsHeaders, "Content-Type": "text/html" }
         });
       } else {
         return new Response(
-          JSON.stringify({ error: 'Failed to securely store access token: ' + accessTokenError.message }),
+          JSON.stringify({ error: `Vault operation failed: ${vaultError instanceof Error ? vaultError.message : String(vaultError)}` }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -136,36 +166,85 @@ Deno.serve(async (req: Request) => {
     // Store refresh token in Vault if present
     let refreshTokenId = null;
     if (tokenData.refresh_token) {
-      const { data: refreshTokenData, error: refreshTokenError } = await supabaseAdmin.rpc(
-        'vault_insert', 
-        { 
+      console.log("Attempting to store refresh token in vault...");
+      try {
+        // Create a unique name with timestamp
+        const timestamp = new Date().getTime();
+        const uniqueRefreshName = `github_refresh_${userId}_${timestamp}`;
+        
+        const refreshVaultParams = { 
           secret: tokenData.refresh_token,
-          secret_name: `github_refresh_${userId}`,
-          description: `GitHub refresh token for user ${userId}`
+          secret_name: uniqueRefreshName,
+          description: `GitHub refresh token for user ${userId} created at ${new Date().toISOString()}`
+        };
+        
+        const refreshResult = await supabaseAdmin.rpc(
+          'vault_insert', 
+          refreshVaultParams
+        );
+        
+        const { data: refreshTokenData, error: refreshTokenError } = refreshResult;
+        
+        console.log("Refresh token vault response:", refreshTokenData ? "success" : "null", 
+                    "Error:", refreshTokenError || "null");
+        
+        if (refreshTokenError) {
+          console.error('Failed to store refresh token in vault:', refreshTokenError);
+          console.error('Refresh token error details:', JSON.stringify(refreshTokenError));
+          // Continue without refresh token
+        } else {
+          refreshTokenId = refreshTokenData.id;
         }
-      );
-      
-      if (refreshTokenError) {
-        console.error('Failed to store refresh token in vault:', refreshTokenError);
+      } catch (refreshError) {
+        console.error("Unexpected error during refresh token vault operation:", refreshError);
         // Continue without refresh token
-      } else {
-        refreshTokenId = refreshTokenData.id;
       }
     }
     
     // Store token IDs in github_connections table
-    const { error: connectionError } = await supabaseAdmin
-      .from("auth.github_connections")
-      .upsert({
-        user_id: userId,
-        access_token_id: accessTokenData.id,
-        refresh_token_id: refreshTokenId,
-        token_type: tokenData.token_type,
-        scope: tokenData.scope,
-        github_username: githubUser.login,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id' });
-      
+    const connectionData = {
+      user_id: userId,
+      access_token_id: accessTokenData.id,
+      refresh_token_id: refreshTokenId,
+      token_type: tokenData.token_type,
+      scope: tokenData.scope,
+      github_username: githubUser.login,
+      updated_at: new Date().toISOString()
+    };
+    
+    // Try different schema paths and methods
+    console.log("Trying to access table in public schema: github_connections");
+    let result;
+    try {
+      // Use public schema table
+      result = await supabaseAdmin
+        .from("github_connections") // This will access public.github_connections
+        .upsert(connectionData, { onConflict: 'user_id' });
+        
+      if (result.error) {
+        console.log("Insertion failed with error:", JSON.stringify(result.error));
+        
+        // Log detailed error info
+        if (result.error.code) {
+          console.log("Error code:", result.error.code);
+        }
+        if (result.error.details) {
+          console.log("Error details:", result.error.details);
+        }
+        if (result.error.hint) {
+          console.log("Error hint:", result.error.hint);
+        }
+      }
+    } catch (err: any) {
+      console.error("Error with GitHub connection storage (detailed):", err);
+      console.log("Error name:", err.name);
+      console.log("Error message:", err.message);
+      console.log("Error stack:", err.stack);
+      result = { error: err };
+    }
+    
+    const { error: connectionError } = result;
+    
     if (connectionError) {
       console.error('Failed to store GitHub connection:', connectionError);
       if (platform === 'web') {
