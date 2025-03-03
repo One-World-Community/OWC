@@ -122,7 +122,10 @@ Deno.serve(async (req: Request) => {
         secret_name: uniqueName,
         description: `GitHub access token for user ${userId} created at ${new Date().toISOString()}`
       };
-      console.log("Vault parameters:", JSON.stringify(vaultParams));
+      console.log("Vault parameters:", JSON.stringify({
+        ...vaultParams,
+        secret: "REDACTED" // Don't log actual secret
+      }));
       
       const vaultResult = await supabaseAdmin.rpc(
         'vault_insert', 
@@ -130,9 +133,13 @@ Deno.serve(async (req: Request) => {
       );
       
       const { data, error: accessTokenError } = vaultResult;
-      accessTokenData = data;
+      console.log("Vault response data:", JSON.stringify(data || {}));
+      console.log("Vault response error:", JSON.stringify(accessTokenError || {}));
       
-      console.log("Vault response:", data || "null", "Error:", accessTokenError || "null");
+      if (!data || !data.id) {
+        console.error("Warning: Vault operation succeeded but returned no valid ID");
+        console.log("Full vault response:", JSON.stringify(vaultResult));
+      }
       
       if (accessTokenError) {
         console.error('Failed to store access token in vault:', accessTokenError);
@@ -149,6 +156,8 @@ Deno.serve(async (req: Request) => {
           );
         }
       }
+      
+      accessTokenData = data || { id: null };
     } catch (vaultError) {
       console.error("Unexpected error during vault operation:", vaultError);
       if (platform === 'web') {
@@ -204,13 +213,18 @@ Deno.serve(async (req: Request) => {
     // Store token IDs in github_connections table
     const connectionData = {
       user_id: userId,
-      access_token_id: accessTokenData.id,
-      refresh_token_id: refreshTokenId,
+      access_token_id: accessTokenData?.id || null,
+      refresh_token_id: refreshTokenId || null,
       token_type: tokenData.token_type,
       scope: tokenData.scope,
       github_username: githubUser.login,
       updated_at: new Date().toISOString()
     };
+    
+    console.log("Connection data (complete, with token IDs):", JSON.stringify({
+      ...connectionData,
+      // Don't redact IDs here, we need to see if they're null or actual UUIDs
+    }));
     
     // Try different schema paths and methods
     console.log("Trying to access table in public schema: github_connections");
