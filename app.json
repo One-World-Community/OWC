@@ -6,7 +6,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "myapp",
+    "scheme": "owc",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -62,7 +62,11 @@
       }
     },
     "android": {
-      "package": "com.oneworldcommunity.oneworldcommunity"
+      "package": "com.oneworldcommunity.oneworldcommunity",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      }
     }
   }
 }

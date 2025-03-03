@@ -6,6 +6,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { Octokit } from "https://esm.sh/octokit"
+import { corsHeaders } from "../_shared/cors.ts"
 
 // GitHub OAuth endpoints
 const GITHUB_OAUTH_URL = "https://github.com/login/oauth/authorize"
@@ -17,7 +18,12 @@ const TEMPLATE_REPO = "jekyll-blog-template"
 
 console.log("Hello from Functions!")
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+  
   try {
     // Setup Supabase client
     const supabaseClient = createClient(
@@ -34,7 +40,7 @@ Deno.serve(async (req) => {
     if (userError || !user) {
       return new Response(
         JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       )
     }
 
@@ -83,7 +89,7 @@ Deno.serve(async (req) => {
         const authUrl = `${GITHUB_OAUTH_URL}?client_id=${clientId}&redirect_uri=${encodeURIComponent(callbackUrl)}&scope=${encodeURIComponent(scopes.join(" "))}&state=${encodeURIComponent(state)}`
         return new Response(
           JSON.stringify({ authUrl }),
-          { headers: { "Content-Type": "application/json" } }
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         )
       }
 
@@ -104,7 +110,7 @@ Deno.serve(async (req) => {
         if (stateError || !stateData) {
           return new Response(
             JSON.stringify({ error: "Invalid state parameter" }),
-            { status: 400, headers: { "Content-Type": "application/json" } }
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           )
         }
 
@@ -141,7 +147,7 @@ Deno.serve(async (req) => {
         if (tokenData.error) {
           return new Response(
             JSON.stringify({ error: tokenData.error_description || tokenData.error }),
-            { status: 400, headers: { "Content-Type": "application/json" } }
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           )
         }
 
@@ -162,7 +168,7 @@ Deno.serve(async (req) => {
           console.error('Failed to store access token in vault:', accessTokenError)
           return new Response(
             JSON.stringify({ error: 'Failed to securely store access token' }),
-            { status: 500, headers: { "Content-Type": "application/json" } }
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           )
         }
 
@@ -203,7 +209,7 @@ Deno.serve(async (req) => {
             success: true, 
             github_username: githubUser.login 
           }),
-          { headers: { "Content-Type": "application/json" } }
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         )
       }
 
@@ -218,7 +224,7 @@ Deno.serve(async (req) => {
         if (connectionError || !connection) {
           return new Response(
             JSON.stringify({ error: "GitHub connection not found" }),
-            { status: 404, headers: { "Content-Type": "application/json" } }
+            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           )
         }
 
@@ -232,7 +238,7 @@ Deno.serve(async (req) => {
         if (tokenError || !tokenData) {
           return new Response(
             JSON.stringify({ error: "GitHub token not found" }),
-            { status: 404, headers: { "Content-Type": "application/json" } }
+            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           )
         }
 
@@ -310,13 +316,13 @@ Deno.serve(async (req) => {
                 github_pages_url: `https://${connection.github_username}.github.io/${name}/`
               }
             }),
-            { headers: { "Content-Type": "application/json" } }
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           )
         } catch (error: any) {
           console.error("GitHub API error:", error)
           return new Response(
             JSON.stringify({ error: error.message || "Failed to create blog" }),
-            { status: 500, headers: { "Content-Type": "application/json" } }
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           )
         }
       }
@@ -331,13 +337,13 @@ Deno.serve(async (req) => {
         if (blogsError) {
           return new Response(
             JSON.stringify({ error: blogsError.message }),
-            { status: 500, headers: { "Content-Type": "application/json" } }
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           )
         }
 
         return new Response(
           JSON.stringify({ blogs }),
-          { headers: { "Content-Type": "application/json" } }
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         )
       }
 
@@ -352,7 +358,7 @@ Deno.serve(async (req) => {
         if (connectionError || !connection) {
           return new Response(
             JSON.stringify({ error: "GitHub connection not found" }),
-            { status: 404, headers: { "Content-Type": "application/json" } }
+            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           )
         }
 
@@ -366,7 +372,7 @@ Deno.serve(async (req) => {
         if (tokenError || !tokenData) {
           return new Response(
             JSON.stringify({ error: "GitHub token not found" }),
-            { status: 404, headers: { "Content-Type": "application/json" } }
+            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           )
         }
 
@@ -380,7 +386,7 @@ Deno.serve(async (req) => {
         if (blogError || !blog) {
           return new Response(
             JSON.stringify({ error: "Blog not found" }),
-            { status: 404, headers: { "Content-Type": "application/json" } }
+            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           )
         }
 
@@ -425,13 +431,13 @@ Deno.serve(async (req) => {
                 url: `${blog.repo_url}/blob/main/${filename}`
               }
             }),
-            { headers: { "Content-Type": "application/json" } }
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           )
         } catch (error: any) {
           console.error("GitHub API error:", error)
           return new Response(
             JSON.stringify({ error: error.message || "Failed to create post" }),
-            { status: 500, headers: { "Content-Type": "application/json" } }
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           )
         }
       }
@@ -439,14 +445,14 @@ Deno.serve(async (req) => {
       default:
         return new Response(
           JSON.stringify({ error: "Unknown action" }),
-          { status: 400, headers: { "Content-Type": "application/json" } }
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         )
     }
   } catch (error: any) {
     console.error("Error:", error)
     return new Response(
       JSON.stringify({ error: error.message || "Internal server error" }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     )
   }
 })
