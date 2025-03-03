@@ -160,14 +160,15 @@ Deno.serve(async (req: Request) => {
           'vault_insert', 
           { 
             secret: tokenData.access_token,
-            associated: `GitHub access token for user ${user.id}`
+            secret_name: `github_token_${user.id}`,
+            description: `GitHub access token for user ${user.id}`
           }
         )
 
         if (accessTokenError) {
           console.error('Failed to store access token in vault:', accessTokenError)
           return new Response(
-            JSON.stringify({ error: 'Failed to securely store access token' }),
+            JSON.stringify({ error: 'Failed to securely store access token: ' + accessTokenError.message }),
             { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           )
         }
@@ -179,7 +180,8 @@ Deno.serve(async (req: Request) => {
             'vault_insert', 
             { 
               secret: tokenData.refresh_token,
-              associated: `GitHub refresh token for user ${user.id}`
+              secret_name: `github_refresh_${user.id}`,
+              description: `GitHub refresh token for user ${user.id}`
             }
           )
 
@@ -450,10 +452,10 @@ Deno.serve(async (req: Request) => {
     }
   } catch (error: any) {
     console.error("Error:", error)
-    return new Response(
+  return new Response(
       JSON.stringify({ error: error.message || "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    )
+  )
   }
 })
 
