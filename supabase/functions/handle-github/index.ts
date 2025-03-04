@@ -20,6 +20,16 @@ interface ErrorWithMessage {
   stack?: string;
 }
 
+// Define interface for vault secret response
+interface VaultSecret {
+  id: string;
+  name: string;
+  description: string;
+  secret: string;
+  updated_at: string;
+  created_at: string;
+}
+
 // Helper function to ensure errors have a message property
 function errorWithMessage(error: unknown): ErrorWithMessage {
   if (error && typeof error === 'object' && 'message' in error) {
@@ -265,6 +275,10 @@ Deno.serve(async (req: Request) => {
         console.log("Creating blog with params:", JSON.stringify(params));
         
         try {
+          if (!user) {
+            throw new Error("User not found");
+          }
+
           // Get user's GitHub token ID
           console.log("Fetching GitHub connection for user ID:", user.id);
           const { data: connection, error: connectionError } = await supabaseAdmin
@@ -294,9 +308,9 @@ Deno.serve(async (req: Request) => {
           // Get access token from vault
           console.log("Fetching GitHub token from vault with id:", connection.access_token_id)
           try {
-            const { data: tokenData, error: tokenError } = await supabaseAdmin
+            const { data: vaultResponse, error: tokenError } = await supabaseAdmin
               .rpc('vault_get_secret', { secret_id: connection.access_token_id })
-              .single() as { data: { id: string, secret: string } | null, error: any }
+              .single() as { data: VaultSecret | null, error: any }
             
             console.log("Token fetch result:", tokenError ? "Error" : "Success")
             
@@ -317,187 +331,181 @@ Deno.serve(async (req: Request) => {
               )
             }
     
-            if (!tokenData || !tokenData.secret) {
+            if (!vaultResponse || !vaultResponse.secret) {
               console.error("No GitHub token found in vault for token ID:", connection.access_token_id)
               return new Response(
                 JSON.stringify({ error: "GitHub token not found" }),
                 { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
               )
             }
-          } catch (unknownError) {
-            const error = errorWithMessage(unknownError)
-            console.error("Unexpected error fetching token:", error.message)
-            return new Response(
-              JSON.stringify({ 
-                error: "Failed to retrieve GitHub token", 
-                message: error.message || "Unknown error occurred",
-                details: "This may indicate a configuration issue with the Vault in your Supabase project."
-              }),
-              { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            )
-          }
 
-          console.log("Successfully retrieved GitHub token from vault");
-          
-          // Initialize GitHub client with user token
-          console.log("Initializing Octokit with GitHub token");
-          const octokit = new Octokit({ auth: tokenData.secret });
-          
-          // Create repository from template
-          const { name, description } = params;
-          console.log(`Creating repo from template: ${TEMPLATE_OWNER}/${TEMPLATE_REPO} -> ${connection.github_username}/${name}`);
-          
-          try {
-            // Create repo from template
-            console.log("Calling Octokit to create repo from template");
-            const { data: repo } = await octokit.rest.repos.createUsingTemplate({
-              template_owner: TEMPLATE_OWNER,
-              template_repo: TEMPLATE_REPO,
-              owner: connection.github_username,
-              name,
-              description,
-              private: false,
-              include_all_branches: false // Changed to false as we only need the main branch
-            });
+            const tokenData = { secret: vaultResponse.secret }
             
-            console.log("Successfully created repo from template:", repo.html_url);
-
+            // Initialize GitHub client with user token
+            console.log("Initializing Octokit with GitHub token");
+            const octokit = new Octokit({ auth: tokenData.secret });
+            
+            // Create repository from template
+            const { name, description } = params;
+            console.log(`Creating repo from template: ${TEMPLATE_OWNER}/${TEMPLATE_REPO} -> ${connection.github_username}/${name}`);
+            
             try {
-              // Wait a moment to ensure repo is fully created before configuring
-              console.log("Waiting for repository to be fully created...");
-              await new Promise(resolve => setTimeout(resolve, 2000));
+              // Create repo from template
+              console.log("Calling Octokit to create repo from template");
+              const { data: repo } = await octokit.rest.repos.createUsingTemplate({
+                template_owner: TEMPLATE_OWNER,
+                template_repo: TEMPLATE_REPO,
+                owner: connection.github_username,
+                name,
+                description,
+                private: false,
+                include_all_branches: false
+              });
               
-              // Configure GitHub Pages
-              console.log("Setting up GitHub Pages");
-              try {
-                await octokit.rest.repos.createPagesSite({
-                  owner: connection.github_username,
-                  repo: name,
-                  source: {
-                    branch: "main",
-                    path: "/"
-                  }
-                });
-                console.log("Successfully set up GitHub Pages");
-              } catch (pagesError) {
-                console.error("Error setting up GitHub Pages (continuing anyway):", pagesError);
-                // We'll continue even if this fails as it might be auto-configured by workflow
-              }
-              
-              // Update _config.yml with user settings
-              console.log("Fetching _config.yml");
-              let configContent;
-              try {
-                configContent = await octokit.rest.repos.getContent({
-                  owner: connection.github_username,
-                  repo: name,
-                  path: '_config.yml'
-                });
-                console.log("Successfully retrieved _config.yml");
-              } catch (unknownError) {
-                const configFetchError = errorWithMessage(unknownError);
-                console.error("Error fetching _config.yml:", configFetchError);
-                throw new Error(`Failed to fetch _config.yml: ${configFetchError.message}`);
-              }
+              console.log("Successfully created repo from template:", repo.html_url);
 
-              // Parse, update and push new config
-              if ('content' in configContent.data) {
-                console.log("Updating _config.yml");
-                // Use native Deno base64 decoding instead of Buffer
-                const content = new TextDecoder().decode(
-                  base64Decode(configContent.data.content)
-                );
-                const updatedContent = content
-                  .replace(/title: .*/, `title: "${params.blogTitle || name}"`)
-                  .replace(/description: .*/, `description: "${description || ''}"`)
-                  .replace(/author: .*/, `author: "${connection.github_username}"`);
-
+              try {
+                // Wait a moment to ensure repo is fully created before configuring
+                console.log("Waiting for repository to be fully created...");
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                // Configure GitHub Pages
+                console.log("Setting up GitHub Pages");
                 try {
-                  await octokit.rest.repos.createOrUpdateFileContents({
+                  await octokit.rest.repos.createPagesSite({
                     owner: connection.github_username,
                     repo: name,
-                    path: '_config.yml',
-                    message: 'Update configuration with user details',
-                    // Use native Deno base64 encoding instead of Buffer
-                    content: base64Encode(new TextEncoder().encode(updatedContent)),
-                    sha: configContent.data.sha
+                    source: {
+                      branch: "main",
+                      path: "/"
+                    }
                   });
-                  console.log("Successfully updated _config.yml");
-                } catch (unknownError) {
-                  const updateError = errorWithMessage(unknownError);
-                  console.error("Error updating _config.yml:", updateError);
-                  throw new Error(`Failed to update _config.yml: ${updateError.message}`);
+                  console.log("Successfully set up GitHub Pages");
+                } catch (pagesError) {
+                  console.error("Error setting up GitHub Pages (continuing anyway):", pagesError);
+                  // We'll continue even if this fails as it might be auto-configured by workflow
                 }
-              } else {
-                console.warn("Unexpected format for _config.yml, not updating");
-              }
-
-              // Store blog info in database
-              console.log("Storing blog info in database");
-              try {
-                await supabaseAdmin
-                  .from("user_blogs")
-                  .insert({
-                    user_id: user.id,
-                    repo_name: name,
-                    repo_full_name: `${connection.github_username}/${name}`,
-                    repo_url: repo.html_url,
-                    is_setup_complete: true
+                
+                // Update _config.yml with user settings
+                console.log("Fetching _config.yml");
+                let configContent;
+                try {
+                  configContent = await octokit.rest.repos.getContent({
+                    owner: connection.github_username,
+                    repo: name,
+                    path: '_config.yml'
                   });
-                console.log("Successfully stored blog info in database");
-              } catch (dbError) {
-                console.error("Error storing blog info in database:", dbError);
-                // Continue even if database storage fails
-              }
+                  console.log("Successfully retrieved _config.yml");
+                } catch (unknownError) {
+                  const configFetchError = errorWithMessage(unknownError);
+                  console.error("Error fetching _config.yml:", configFetchError);
+                  throw new Error(`Failed to fetch _config.yml: ${configFetchError.message}`);
+                }
 
-              const githubPagesUrl = `https://${connection.github_username}.github.io/${name}/`;
-              console.log("Blog creation completed successfully. GitHub Pages URL:", githubPagesUrl);
-              
-              return new Response(
-                JSON.stringify({ 
-                  success: true, 
-                  blog: {
-                    name,
-                    url: repo.html_url,
-                    github_pages_url: githubPagesUrl
+                // Parse, update and push new config
+                if ('content' in configContent.data) {
+                  console.log("Updating _config.yml");
+                  const content = new TextDecoder().decode(
+                    base64Decode(configContent.data.content)
+                  );
+                  const updatedContent = content
+                    .replace(/title: .*/, `title: "${params.blogTitle || name}"`)
+                    .replace(/description: .*/, `description: "${description || ''}"`)
+                    .replace(/author: .*/, `author: "${connection.github_username}"`);
+
+                  try {
+                    await octokit.rest.repos.createOrUpdateFileContents({
+                      owner: connection.github_username,
+                      repo: name,
+                      path: '_config.yml',
+                      message: 'Update configuration with user details',
+                      content: base64Encode(new TextEncoder().encode(updatedContent)),
+                      sha: configContent.data.sha
+                    });
+                    console.log("Successfully updated _config.yml");
+                  } catch (unknownError) {
+                    const updateError = errorWithMessage(unknownError);
+                    console.error("Error updating _config.yml:", updateError);
+                    throw new Error(`Failed to update _config.yml: ${updateError.message}`);
                   }
-                }),
-                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-              );
+                } else {
+                  console.warn("Unexpected format for _config.yml, not updating");
+                }
+
+                // Store blog info in database
+                console.log("Storing blog info in database");
+                try {
+                  await supabaseAdmin
+                    .from("user_blogs")
+                    .insert({
+                      user_id: user.id,
+                      repo_name: name,
+                      repo_full_name: `${connection.github_username}/${name}`,
+                      repo_url: repo.html_url,
+                      is_setup_complete: true
+                    });
+                  console.log("Successfully stored blog info in database");
+                } catch (dbError) {
+                  console.error("Error storing blog info in database:", dbError);
+                  // Continue even if database storage fails
+                }
+
+                const githubPagesUrl = `https://${connection.github_username}.github.io/${name}/`;
+                console.log("Blog creation completed successfully. GitHub Pages URL:", githubPagesUrl);
+                
+                return new Response(
+                  JSON.stringify({ 
+                    success: true, 
+                    blog: {
+                      name,
+                      url: repo.html_url,
+                      github_pages_url: githubPagesUrl
+                    }
+                  }),
+                  { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                );
+              } catch (unknownError) {
+                const setupError = errorWithMessage(unknownError);
+                console.error("Error in blog setup process:", setupError);
+                
+                // Even if there's an error in the setup, the repo was created, so return partial success
+                return new Response(
+                  JSON.stringify({ 
+                    success: true, 
+                    warning: "Repository created but there was an error in the setup process: " + setupError.message,
+                    blog: {
+                      name,
+                      url: repo.html_url,
+                      github_pages_url: `https://${connection.github_username}.github.io/${name}/`
+                    }
+                  }),
+                  { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                );
+              }
             } catch (unknownError) {
-              const setupError = errorWithMessage(unknownError);
-              console.error("Error in blog setup process:", setupError);
+              const error = errorWithMessage(unknownError);
+              console.error("GitHub API error creating repository:", error);
+              const errorMessage = error.message || "Failed to create blog";
               
-              // Even if there's an error in the setup, the repo was created, so return partial success
+              // Check if error response has more details
+              if (error.response) {
+                console.error("GitHub API error response:", {
+                  status: error.response.status,
+                  statusText: error.response.statusText,
+                  data: error.response.data
+                });
+              }
+              
               return new Response(
-                JSON.stringify({ 
-                  success: true, 
-                  warning: "Repository created but there was an error in the setup process: " + setupError.message,
-                  blog: {
-                    name,
-                    url: repo.html_url,
-                    github_pages_url: `https://${connection.github_username}.github.io/${name}/`
-                  }
-                }),
-                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                JSON.stringify({ error: errorMessage, details: error.response?.data || {} }),
+                { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
               );
             }
           } catch (unknownError) {
             const error = errorWithMessage(unknownError);
-            console.error("GitHub API error creating repository:", error);
-            const errorMessage = error.message || "Failed to create blog";
-            
-            // Check if error response has more details
-            if (error.response) {
-              console.error("GitHub API error response:", JSON.stringify({
-                status: error.response.status,
-                statusText: error.response.statusText,
-                data: error.response.data
-              }));
-            }
-            
+            console.error("Error:", error);
             return new Response(
-              JSON.stringify({ error: errorMessage, details: error.response?.data || {} }),
+              JSON.stringify({ error: error.message || "Internal server error" }),
               { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
           }
@@ -536,117 +544,131 @@ Deno.serve(async (req: Request) => {
       }
 
       case "create-post": {
-        // Get user's GitHub token and blog info
-        const { data: connection, error: connectionError } = await supabaseAdmin
-          .from("github_connections")
-          .select("access_token_id")
-          .eq("user_id", user.id)
-          .single()
-
-        if (connectionError || !connection) {
-          return new Response(
-            JSON.stringify({ error: "GitHub connection not found" }),
-            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          )
-        }
-
-        // Get access token from vault
-        console.log("Fetching GitHub token from vault with id:", connection.access_token_id)
         try {
-          const { data: tokenData, error: tokenError } = await supabaseAdmin
-            .rpc('vault_get_secret', { secret_id: connection.access_token_id })
-            .single() as { data: { id: string, secret: string } | null, error: any }
-          
-          console.log("Token fetch result:", tokenError ? "Error" : "Success")
-          
-          if (tokenError) {
-            console.error("Error fetching token:", JSON.stringify({
-              code: tokenError.code,
-              message: tokenError.message,
-              details: tokenError.details,
-              hint: tokenError.hint
-            }))
-            return new Response(
-              JSON.stringify({ 
-                error: "Error fetching GitHub token",
-                details: tokenError.message,
-                hint: "You may need to create the vault_get_secret RPC function. See the README.md for instructions."
-              }),
-              { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            )
+          if (!user) {
+            throw new Error("User not found");
           }
-  
-          if (!tokenData || !tokenData.secret) {
-            console.error("No GitHub token found in vault for token ID:", connection.access_token_id)
-            return new Response(
-              JSON.stringify({ error: "GitHub token not found" }),
-              { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            )
-          }
-          
-          const { data: blog, error: blogError } = await supabaseAdmin
-            .from("public.user_blogs")
-            .select("*")
+
+          // Get user's GitHub token and blog info
+          const { data: connection, error: connectionError } = await supabaseAdmin
+            .from("github_connections")
+            .select("access_token_id")
             .eq("user_id", user.id)
-            .eq("repo_name", params.blogName)
             .single()
 
-          if (blogError || !blog) {
+          if (connectionError || !connection) {
             return new Response(
-              JSON.stringify({ error: "Blog not found" }),
+              JSON.stringify({ error: "GitHub connection not found" }),
               { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
             )
           }
 
-          // Initialize GitHub client with user token
-          const octokit = new Octokit({ auth: tokenData.secret })
-          
-          // Format post date and filename
-          const date = new Date()
-          const dateStr = date.toISOString().split('T')[0]
-          const filename = `_posts/${dateStr}-${params.slug}.md`
-          
-          // Create Jekyll front matter
-          const frontMatter = [
-            '---',
-            `layout: post`,
-            `title: "${params.title}"`,
-            `date: ${date.toISOString()}`,
-            `categories: ${params.categories || ''}`,
-            '---',
-            '',
-            params.content
-          ].join('\n')
-
+          // Get access token from vault
+          console.log("Fetching GitHub token from vault with id:", connection.access_token_id)
           try {
-            // Commit post to repository
-            const [owner, repo] = blog.repo_full_name.split('/')
+            const { data: vaultResponse, error: tokenError } = await supabaseAdmin
+              .rpc('vault_get_secret', { secret_id: connection.access_token_id })
+              .single() as { data: VaultSecret | null, error: any }
             
-            await octokit.rest.repos.createOrUpdateFileContents({
-              owner,
-              repo,
-              path: filename,
-              message: `Add new post: ${params.title}`,
-              // Use native Deno base64 encoding instead of Buffer
-              content: base64Encode(new TextEncoder().encode(frontMatter))
-            })
+            console.log("Token fetch result:", tokenError ? "Error" : "Success")
+            
+            if (tokenError) {
+              console.error("Error fetching token:", JSON.stringify({
+                code: tokenError.code,
+                message: tokenError.message,
+                details: tokenError.details,
+                hint: tokenError.hint
+              }))
+              return new Response(
+                JSON.stringify({ 
+                  error: "Error fetching GitHub token",
+                  details: tokenError.message,
+                  hint: "You may need to create the vault_get_secret RPC function. See the README.md for instructions."
+                }),
+                { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              )
+            }
+    
+            if (!vaultResponse || !vaultResponse.secret) {
+              console.error("No GitHub token found in vault for token ID:", connection.access_token_id)
+              return new Response(
+                JSON.stringify({ error: "GitHub token not found" }),
+                { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              )
+            }
 
-            return new Response(
-              JSON.stringify({ 
-                success: true, 
-                post: {
-                  title: params.title,
-                  date: dateStr,
-                  url: `${blog.repo_url}/blob/main/${filename}`
-                }
-              }),
-              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            )
+            const tokenData = { secret: vaultResponse.secret }
+            
+            const { data: blog, error: blogError } = await supabaseAdmin
+              .from("public.user_blogs")
+              .select("*")
+              .eq("user_id", user.id)
+              .eq("repo_name", params.blogName)
+              .single()
+
+            if (blogError || !blog) {
+              return new Response(
+                JSON.stringify({ error: "Blog not found" }),
+                { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              )
+            }
+
+            // Initialize GitHub client with user token
+            const octokit = new Octokit({ auth: tokenData.secret })
+            
+            // Format post date and filename
+            const date = new Date()
+            const dateStr = date.toISOString().split('T')[0]
+            const filename = `_posts/${dateStr}-${params.slug}.md`
+            
+            // Create Jekyll front matter
+            const frontMatter = [
+              '---',
+              `layout: post`,
+              `title: "${params.title}"`,
+              `date: ${date.toISOString()}`,
+              `categories: ${params.categories || ''}`,
+              '---',
+              '',
+              params.content
+            ].join('\n')
+
+            try {
+              // Commit post to repository
+              const [owner, repo] = blog.repo_full_name.split('/')
+              
+              await octokit.rest.repos.createOrUpdateFileContents({
+                owner,
+                repo,
+                path: filename,
+                message: `Add new post: ${params.title}`,
+                content: base64Encode(new TextEncoder().encode(frontMatter))
+              })
+
+              return new Response(
+                JSON.stringify({ 
+                  success: true, 
+                  post: {
+                    title: params.title,
+                    date: dateStr,
+                    url: `${blog.repo_url}/blob/main/${filename}`
+                  }
+                }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              )
+            } catch (unknownError) {
+              const error = errorWithMessage(unknownError);
+              console.error("GitHub API error:", error);
+              return new Response(
+                JSON.stringify({ error: error.message || "Failed to create post" }),
+                { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
+            }
           } catch (unknownError) {
             const error = errorWithMessage(unknownError);
-            console.error("GitHub API error:", error);
+            console.error("Error:", error);
             return new Response(
-              JSON.stringify({ error: error.message || "Failed to create post" }),
+              JSON.stringify({ error: error.message || "Internal server error" }),
               { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
           }
