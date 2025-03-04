@@ -6,6 +6,7 @@ import { useAuth } from '../../lib/auth';
 import { useTheme } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
 import type { Profile } from '../../lib/supabase';
+import GitHubToggle from '../components/GitHubToggle';
 
 type Stats = {
   topics: number;
@@ -211,6 +212,8 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
           </View>
         </TouchableOpacity>
+
+        <GitHubToggle colors={colors} />
       </View>
 
       <TouchableOpacity 

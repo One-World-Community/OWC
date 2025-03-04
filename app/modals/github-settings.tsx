@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Alert, ScrollView, TouchableOpacity } from 'react-native';
 import { Stack } from 'expo-router';
-import { supabase } from '../../../lib/supabase';
-import GitHubAuth from '../../components/GitHubAuth';
+import { supabase } from '../../lib/supabase';
+import GitHubAuth from '../components/GitHubAuth';
+import { useTheme } from '../../lib/theme';
 
-export default function GitHubSettingsScreen() {
+export default function GitHubSettingsModal() {
   const [loading, setLoading] = useState(true);
   const [githubUsername, setGithubUsername] = useState<string | null>(null);
   const [blogs, setBlogs] = useState<any[]>([]);
+  const { colors } = useTheme();
 
   useEffect(() => {
     checkGitHubConnection();
@@ -17,7 +19,25 @@ export default function GitHubSettingsScreen() {
     try {
       setLoading(true);
       
-      // Check if user has a GitHub connection
+      // First check if user has a GitHub connection from the database
+      const { data: connectionData, error: connectionError } = await supabase
+        .from('github_connections')
+        .select('github_username')
+        .single();
+      
+      if (connectionError && connectionError.code !== 'PGRST116') { // PGRST116 is "no rows returned" error
+        throw connectionError;
+      }
+      
+      if (connectionData) {
+        setGithubUsername(connectionData.github_username);
+      } else {
+        setGithubUsername(null);
+        setBlogs([]);
+        return; // No connection, so don't try to fetch blogs
+      }
+      
+      // Fetch blogs if connected
       const { data, error } = await supabase.functions.invoke('handle-github', {
         body: {
           action: 'get-blogs'
@@ -26,11 +46,8 @@ export default function GitHubSettingsScreen() {
       
       if (error) throw error;
       
-      if (data?.blogs?.length > 0) {
-        // User has blogs, so they must have a GitHub connection
+      if (data?.blogs) {
         setBlogs(data.blogs);
-        // We could also fetch the GitHub username here if needed
-        setGithubUsername('Connected'); // Placeholder
       }
     } catch (error) {
       console.error('Error checking GitHub connection:', error);
@@ -82,29 +99,37 @@ export default function GitHubSettingsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ title: 'GitHub Integration' }} />
       
       {loading ? (
-        <ActivityIndicator size="large" />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
       ) : (
         <>
           {githubUsername ? (
             <View style={styles.connectedContainer}>
-              <Text style={styles.title}>Connected to GitHub</Text>
-              <Text style={styles.subtitle}>Username: {githubUsername}</Text>
+              <Text style={[styles.title, { color: colors.text }]}>Connected to GitHub</Text>
+              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Username: {githubUsername}</Text>
               
-              <Text style={styles.sectionTitle}>Your Blogs</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Your Blogs</Text>
               {blogs.length > 0 ? (
                 blogs.map((blog) => (
-                  <View key={blog.id} style={styles.blogItem}>
-                    <Text style={styles.blogName}>{blog.repo_name}</Text>
-                    <Text style={styles.blogUrl}>{blog.repo_url}</Text>
+                  <View key={blog.id} style={[styles.blogItem, { borderColor: colors.border }]}>
+                    <Text style={[styles.blogName, { color: colors.text }]}>{blog.repo_name}</Text>
+                    <Text style={[styles.blogUrl, { color: colors.primary }]}>{blog.repo_url}</Text>
                   </View>
                 ))
               ) : (
-                <Text>No blogs yet. Create one to get started!</Text>
+                <Text style={{ color: colors.textSecondary }}>No blogs yet. Create one to get started!</Text>
               )}
+              
+              <TouchableOpacity 
+                style={[styles.button, { backgroundColor: colors.primary }]} 
+                onPress={createNewBlog}>
+                <Text style={[styles.buttonText, { color: colors.card }]}>Create New Blog</Text>
+              </TouchableOpacity>
               
               <View style={styles.buttonContainer}>
                 <GitHubAuth 
@@ -115,8 +140,8 @@ export default function GitHubSettingsScreen() {
             </View>
           ) : (
             <View style={styles.connectContainer}>
-              <Text style={styles.title}>Connect to GitHub</Text>
-              <Text style={styles.subtitle}>
+              <Text style={[styles.title, { color: colors.text }]}>Connect to GitHub</Text>
+              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
                 Connect your GitHub account to create and manage blogs.
               </Text>
               
@@ -130,7 +155,7 @@ export default function GitHubSettingsScreen() {
           )}
         </>
       )}
-    </View>
+    </ScrollView>
   );
 }
 
@@ -138,15 +163,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: '#fff',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 50,
   },
   connectContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
+    paddingVertical: 40,
   },
   connectedContainer: {
     flex: 1,
+    paddingVertical: 20,
   },
   title: {
     fontSize: 24,
@@ -156,7 +187,6 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     marginBottom: 20,
-    color: '#666',
   },
   buttonContainer: {
     marginTop: 20,
@@ -170,7 +200,6 @@ const styles = StyleSheet.create({
   blogItem: {
     padding: 15,
     borderWidth: 1,
-    borderColor: '#ddd',
     borderRadius: 8,
     marginBottom: 10,
   },
@@ -180,7 +209,17 @@ const styles = StyleSheet.create({
   },
   blogUrl: {
     fontSize: 14,
-    color: '#0366d6',
     marginTop: 5,
+  },
+  button: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  buttonText: {
+    fontSize: 16,
+    fontWeight: '500',
   },
 }); 
