@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { supabase } from '../../lib/supabase';
 
 interface BlogSetupProps {
@@ -13,36 +13,66 @@ export default function BlogSetup({ onSuccess, onError, colors }: BlogSetupProps
   const [blogName, setBlogName] = useState('');
   const [blogTitle, setBlogTitle] = useState('');
   const [blogDescription, setBlogDescription] = useState('');
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
 
   const setupBlog = async () => {
+    // Clear any previous error details
+    setErrorDetails(null);
+
     if (!blogName.trim()) {
       Alert.alert('Error', 'Please enter a blog name');
       return;
     }
 
+    // Simple validation for blog name (should be URL-friendly)
+    const safeNameRegex = /^[a-z0-9-]+$/;
+    if (!safeNameRegex.test(blogName.trim())) {
+      Alert.alert('Error', 'Blog name can only contain lowercase letters, numbers, and hyphens');
+      return;
+    }
+
     try {
       setLoading(true);
+      console.log("Setting up blog with name:", blogName.trim());
       
       // Generate a unique name if not provided
-      const name = blogName.trim() || `blog-${Date.now()}`;
+      const name = blogName.trim();
+      const title = blogTitle.trim() || name;
+      const description = blogDescription.trim() || 'My personal blog created with OWC';
+      
+      console.log("Calling handle-github function with params:", { name, title, description });
       
       // Create blog using the handle-github edge function
       const { data, error } = await supabase.functions.invoke('handle-github', {
         body: {
           action: 'create-blog',
           params: {
-            name: name,
-            description: blogDescription.trim() || 'My personal blog created with OWC',
-            blogTitle: blogTitle.trim() || name
+            name,
+            description,
+            blogTitle: title
           }
         }
       });
       
-      if (error) throw error;
+      console.log("handle-github function response:", { data, error });
+      
+      if (error) {
+        console.error("Edge function error:", error);
+        throw error;
+      }
       
       if (data?.success) {
+        console.log("Blog created successfully:", data.blog);
+        
+        // If there's a warning, show it but continue
+        if (data.warning) {
+          console.warn("Blog creation warning:", data.warning);
+          Alert.alert('Warning', `Blog created, but with warning: ${data.warning}`);
+        }
+        
         // Store the blog URL in user metadata
         try {
+          console.log("Updating user metadata with blog URL:", data.blog.github_pages_url);
           const { error: updateError } = await supabase.auth.updateUser({
             data: { blog_url: data.blog.github_pages_url }
           });
@@ -59,11 +89,41 @@ export default function BlogSetup({ onSuccess, onError, colors }: BlogSetupProps
         setBlogTitle('');
         setBlogDescription('');
       } else {
-        throw new Error('Failed to create blog');
+        // If there's no explicit error but also no success, handle it
+        console.error("Blog creation failed without specific error:", data);
+        throw new Error('Failed to create blog: Unknown error');
       }
     } catch (error) {
       console.error('Error setting up blog:', error);
-      onError(error instanceof Error ? error.message : String(error));
+      
+      // Enhanced error handling to show more details
+      let errorMessage = error instanceof Error ? error.message : String(error);
+      let details = '';
+      
+      // Try to extract more details from the error response
+      if (error instanceof Error && 'message' in error) {
+        try {
+          // Handle FunctionsHttpError which might contain JSON response with more details
+          const responseData = JSON.parse(errorMessage.split('body: ')[1] || '{}');
+          if (responseData.error) {
+            errorMessage = responseData.error;
+            
+            if (responseData.details) {
+              details = JSON.stringify(responseData.details, null, 2);
+            }
+          }
+        } catch (parseError) {
+          // If can't parse, just use the original message
+          console.log("Couldn't parse error details:", parseError);
+        }
+      }
+      
+      // Save error details for display
+      if (details) {
+        setErrorDetails(details);
+      }
+      
+      onError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -86,7 +146,12 @@ export default function BlogSetup({ onSuccess, onError, colors }: BlogSetupProps
           value={blogName}
           onChangeText={setBlogName}
           editable={!loading}
+          autoCapitalize="none"
+          autoCorrect={false}
         />
+        <Text style={[styles.helperText, { color: colors.textSecondary }]}>
+          Only lowercase letters, numbers, and hyphens allowed
+        </Text>
       </View>
       
       <View style={styles.formGroup}>
@@ -126,6 +191,18 @@ export default function BlogSetup({ onSuccess, onError, colors }: BlogSetupProps
         )}
       </TouchableOpacity>
       
+      {errorDetails && (
+        <ScrollView 
+          style={[styles.errorDetails, { backgroundColor: colors.error + '10', borderColor: colors.error }]}>
+          <Text style={[styles.errorDetailsText, { color: colors.error }]}>
+            Error Details:
+          </Text>
+          <Text style={[styles.errorDetailsContent, { color: colors.error }]}>
+            {errorDetails}
+          </Text>
+        </ScrollView>
+      )}
+      
       <Text style={[styles.note, { color: colors.textSecondary }]}>
         Note: It may take a few minutes for your blog to be fully set up and deployed.
       </Text>
@@ -161,6 +238,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     fontSize: 16,
   },
+  helperText: {
+    fontSize: 12,
+    marginTop: 4,
+  },
   button: {
     padding: 14,
     borderRadius: 8,
@@ -176,5 +257,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 16,
     fontStyle: 'italic',
+  },
+  errorDetails: {
+    marginTop: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderRadius: 8,
+    maxHeight: 150,
+  },
+  errorDetailsText: {
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  errorDetailsContent: {
+    fontFamily: 'monospace',
+    fontSize: 12,
   },
 }); 
