@@ -86,10 +86,6 @@ Deno.serve(async (req: Request) => {
         auth: {
           autoRefreshToken: false,
           persistSession: false
-        },
-        // Explicitly set the schema to use for the admin client
-        db: {
-          schema: "vault"
         }
       }
     )
@@ -245,7 +241,7 @@ Deno.serve(async (req: Request) => {
 
         // Store token IDs in github_connections table
         await supabaseAdmin
-          .from("auth.github_connections")
+          .from("github_connections")
           .upsert({
             user_id: user.id,
             access_token_id: accessTokenData.id,
@@ -542,7 +538,7 @@ Deno.serve(async (req: Request) => {
       case "create-post": {
         // Get user's GitHub token and blog info
         const { data: connection, error: connectionError } = await supabaseAdmin
-          .from("auth.github_connections")
+          .from("github_connections")
           .select("access_token_id")
           .eq("user_id", user.id)
           .single()
