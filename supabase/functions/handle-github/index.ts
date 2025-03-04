@@ -26,6 +26,8 @@ interface VaultSecret {
   name: string;
   description: string;
   secret: string;
+  key_id: string;
+  nonce: Uint8Array;
   updated_at: string;
   created_at: string;
 }
