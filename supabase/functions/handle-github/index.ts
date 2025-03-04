@@ -38,6 +38,12 @@ function errorWithMessage(error: unknown): ErrorWithMessage {
   return { message: String(error) };
 }
 
+// Helper function to clean GitHub token
+function cleanGitHubToken(token: string): string {
+  // Remove any whitespace, newlines, or carriage returns
+  return token.replace(/[\s\r\n]+/g, '');
+}
+
 // GitHub OAuth endpoints
 const GITHUB_OAUTH_URL = "https://github.com/login/oauth/authorize"
 const GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
@@ -339,7 +345,8 @@ Deno.serve(async (req: Request) => {
               )
             }
 
-            const tokenData = { secret: vaultResponse.secret }
+            const cleanToken = cleanGitHubToken(vaultResponse.secret);
+            const tokenData = { secret: cleanToken }
             
             // Initialize GitHub client with user token
             console.log("Initializing Octokit with GitHub token");
@@ -597,7 +604,8 @@ Deno.serve(async (req: Request) => {
               )
             }
 
-            const tokenData = { secret: vaultResponse.secret }
+            const cleanToken = cleanGitHubToken(vaultResponse.secret);
+            const tokenData = { secret: cleanToken }
             
             const { data: blog, error: blogError } = await supabaseAdmin
               .from("public.user_blogs")
