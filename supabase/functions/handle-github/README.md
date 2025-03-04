@@ -17,24 +17,78 @@ repository creation, and content management for Jekyll blogs.
 ### 2. Enable Supabase Vault
 
 1. Ensure Vault is enabled in your Supabase project (Project Settings > API > Vault)
+   - This is critical as the app uses Vault to securely store OAuth tokens
+   - If Vault is not enabled, you'll get the error: `relation "public.vault.decrypted_secrets" does not exist`
+
 2. Create an RPC function to simplify inserting secrets into Vault:
 
 ```sql
 -- Run this in the SQL Editor
-CREATE OR REPLACE FUNCTION vault_insert(secret text, associated text)
+CREATE OR REPLACE FUNCTION vault_insert(secret text, secret_name text DEFAULT NULL, description text DEFAULT '')
 RETURNS TABLE (id uuid, name text)
 SECURITY DEFINER
 AS $$
 BEGIN
   RETURN QUERY
-  INSERT INTO vault.secrets (secret, associated)
-  VALUES (secret, associated)
+  INSERT INTO vault.secrets (secret, name, description)
+  VALUES (secret, secret_name, description)
   RETURNING vault.secrets.id, vault.secrets.name;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Grant execute permission to authenticated users
+GRANT EXECUTE ON FUNCTION vault_insert TO authenticated;
 ```
 
-### 3. Set Supabase Secrets
+3. Verify Vault access by running a test query:
+```sql
+-- This should return some rows if Vault is properly set up
+SELECT * FROM vault.secrets LIMIT 5;
+
+-- This view should be accessible for reading secrets
+SELECT * FROM vault.decrypted_secrets LIMIT 5;
+```
+
+### Troubleshooting Vault Issues
+
+If you encounter errors related to Vault:
+
+1. **"relation public.vault.decrypted_secrets does not exist"**:
+   - Ensure Vault is enabled in your project
+   - Check that the service role has access to the vault schema
+   - Verify your database migrations have been applied correctly
+
+2. **"The schema must be one of the following: public, graphql_public"**:
+   - This occurs when trying to access the vault schema directly
+   - Create an RPC function to access the vault (see below)
+
+3. **No data returned from vault queries**:
+   - Confirm that secrets were actually stored in the vault
+   - Check the access_token_id in the github_connections table is correct
+   - Ensure the service role key used has sufficient permissions
+
+### 4. Create an RPC Function to Get Secrets from Vault
+
+To securely access vault secrets from the client or edge functions, create this helper function:
+
+```sql
+-- Run this in the SQL Editor
+CREATE OR REPLACE FUNCTION vault_get_secret(secret_id uuid)
+RETURNS TABLE (id uuid, name text, description text, secret text, updated_at timestamptz, created_at timestamptz)
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT * FROM vault.decrypted_secrets
+  WHERE id = secret_id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Grant execute permission to anon and authenticated users
+GRANT EXECUTE ON FUNCTION vault_get_secret TO anon, authenticated;
+```
+
+### 5. Set Supabase Secrets
 
 Set the following secrets in the Supabase dashboard (Project Settings > API > Functions):
 
@@ -43,7 +97,7 @@ supabase secrets set GITHUB_CLIENT_ID="your-github-client-id"
 supabase secrets set GITHUB_CLIENT_SECRET="your-github-client-secret"
 ```
 
-### 4. Set Up Your Jekyll Blog Template
+### 6. Set Up Your Jekyll Blog Template
 
 1. Create a Jekyll blog repository in your GitHub account
 2. Configure it as a template repository (Settings > Template repository)
@@ -54,7 +108,7 @@ supabase secrets set GITHUB_CLIENT_SECRET="your-github-client-secret"
    const TEMPLATE_REPO = "jekyll-blog-template"
    ```
 
-### 5. Deploy the Edge Function
+### 7. Deploy the Edge Function
 
 ```bash
 supabase functions deploy handle-github

@@ -7,8 +7,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { Octokit } from "https://esm.sh/octokit"
 import { corsHeaders } from "../_shared/cors.ts"
-// Import Buffer for Deno
-import { Buffer } from "https://deno.land/std/node/buffer.ts"
+// No need for Buffer import - using native Deno base64 encoding/decoding
 
 // Define error interface for better type checking
 interface ErrorWithMessage {
@@ -39,6 +38,20 @@ const TEMPLATE_REPO = "owc-blog-template"
 
 console.log("Hello from Functions!")
 
+// Base64 encoding/decoding functions
+function base64Encode(data: Uint8Array): string {
+  return btoa(String.fromCharCode(...data));
+}
+
+function base64Decode(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -68,7 +81,17 @@ Deno.serve(async (req: Request) => {
     // Setup admin client for accessing auth schema and vault
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        },
+        // Explicitly set the schema to use for the admin client
+        db: {
+          schema: "vault"
+        }
+      }
     )
 
     // Parse request body
@@ -273,27 +296,49 @@ Deno.serve(async (req: Request) => {
           console.log("Found GitHub connection for username:", connection.github_username);
 
           // Get access token from vault
-          console.log("Fetching GitHub token from vault for token ID:", connection.access_token_id);
-          const { data: tokenData, error: tokenError } = await supabaseAdmin
-            .from('vault.decrypted_secrets')
-            .select('secret')
-            .eq('id', connection.access_token_id)
-            .single();
-
-          if (tokenError) {
-            console.error("Error fetching GitHub token from vault:", tokenError);
+          console.log("Fetching GitHub token from vault with id:", connection.access_token_id)
+          try {
+            const { data: tokenData, error: tokenError } = await supabaseAdmin
+              .rpc('vault_get_secret', { secret_id: connection.access_token_id })
+              .single() as { data: { id: string, secret: string } | null, error: any }
+            
+            console.log("Token fetch result:", tokenError ? "Error" : "Success")
+            
+            if (tokenError) {
+              console.error("Error fetching token:", JSON.stringify({
+                code: tokenError.code,
+                message: tokenError.message,
+                details: tokenError.details,
+                hint: tokenError.hint
+              }))
+              return new Response(
+                JSON.stringify({ 
+                  error: "Error fetching GitHub token",
+                  details: tokenError.message,
+                  hint: "You may need to create the vault_get_secret RPC function. See the README.md for instructions."
+                }),
+                { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              )
+            }
+    
+            if (!tokenData || !tokenData.secret) {
+              console.error("No GitHub token found in vault for token ID:", connection.access_token_id)
+              return new Response(
+                JSON.stringify({ error: "GitHub token not found" }),
+                { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              )
+            }
+          } catch (unknownError) {
+            const error = errorWithMessage(unknownError)
+            console.error("Unexpected error fetching token:", error.message)
             return new Response(
-              JSON.stringify({ error: "GitHub token not found", details: tokenError }),
-              { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
-
-          if (!tokenData) {
-            console.error("No GitHub token found in vault for token ID:", connection.access_token_id);
-            return new Response(
-              JSON.stringify({ error: "GitHub token not found" }),
-              { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
+              JSON.stringify({ 
+                error: "Failed to retrieve GitHub token", 
+                message: error.message || "Unknown error occurred",
+                details: "This may indicate a configuration issue with the Vault in your Supabase project."
+              }),
+              { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            )
           }
 
           console.log("Successfully retrieved GitHub token from vault");
@@ -362,7 +407,10 @@ Deno.serve(async (req: Request) => {
               // Parse, update and push new config
               if ('content' in configContent.data) {
                 console.log("Updating _config.yml");
-                const content = Buffer.from(configContent.data.content, 'base64').toString();
+                // Use native Deno base64 decoding instead of Buffer
+                const content = new TextDecoder().decode(
+                  base64Decode(configContent.data.content)
+                );
                 const updatedContent = content
                   .replace(/title: .*/, `title: "${params.blogTitle || name}"`)
                   .replace(/description: .*/, `description: "${description || ''}"`)
@@ -374,7 +422,8 @@ Deno.serve(async (req: Request) => {
                     repo: name,
                     path: '_config.yml',
                     message: 'Update configuration with user details',
-                    content: Buffer.from(updatedContent).toString('base64'),
+                    // Use native Deno base64 encoding instead of Buffer
+                    content: base64Encode(new TextEncoder().encode(updatedContent)),
                     sha: configContent.data.sha
                   });
                   console.log("Successfully updated _config.yml");
@@ -506,82 +555,112 @@ Deno.serve(async (req: Request) => {
         }
 
         // Get access token from vault
-        const { data: tokenData, error: tokenError } = await supabaseAdmin
-          .from('vault.decrypted_secrets')
-          .select('secret')
-          .eq('id', connection.access_token_id)
-          .single()
-
-        if (tokenError || !tokenData) {
-          return new Response(
-            JSON.stringify({ error: "GitHub token not found" }),
-            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          )
-        }
-
-        const { data: blog, error: blogError } = await supabaseAdmin
-          .from("public.user_blogs")
-          .select("*")
-          .eq("user_id", user.id)
-          .eq("repo_name", params.blogName)
-          .single()
-
-        if (blogError || !blog) {
-          return new Response(
-            JSON.stringify({ error: "Blog not found" }),
-            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          )
-        }
-
-        // Initialize GitHub client with user token
-        const octokit = new Octokit({ auth: tokenData.secret })
-        
-        // Format post date and filename
-        const date = new Date()
-        const dateStr = date.toISOString().split('T')[0]
-        const filename = `_posts/${dateStr}-${params.slug}.md`
-        
-        // Create Jekyll front matter
-        const frontMatter = [
-          '---',
-          `layout: post`,
-          `title: "${params.title}"`,
-          `date: ${date.toISOString()}`,
-          `categories: ${params.categories || ''}`,
-          '---',
-          '',
-          params.content
-        ].join('\n')
-
+        console.log("Fetching GitHub token from vault with id:", connection.access_token_id)
         try {
-          // Commit post to repository
-          const [owner, repo] = blog.repo_full_name.split('/')
+          const { data: tokenData, error: tokenError } = await supabaseAdmin
+            .rpc('vault_get_secret', { secret_id: connection.access_token_id })
+            .single() as { data: { id: string, secret: string } | null, error: any }
           
-          await octokit.rest.repos.createOrUpdateFileContents({
-            owner,
-            repo,
-            path: filename,
-            message: `Add new post: ${params.title}`,
-            content: Buffer.from(frontMatter).toString('base64')
-          })
+          console.log("Token fetch result:", tokenError ? "Error" : "Success")
+          
+          if (tokenError) {
+            console.error("Error fetching token:", JSON.stringify({
+              code: tokenError.code,
+              message: tokenError.message,
+              details: tokenError.details,
+              hint: tokenError.hint
+            }))
+            return new Response(
+              JSON.stringify({ 
+                error: "Error fetching GitHub token",
+                details: tokenError.message,
+                hint: "You may need to create the vault_get_secret RPC function. See the README.md for instructions."
+              }),
+              { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            )
+          }
+  
+          if (!tokenData || !tokenData.secret) {
+            console.error("No GitHub token found in vault for token ID:", connection.access_token_id)
+            return new Response(
+              JSON.stringify({ error: "GitHub token not found" }),
+              { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            )
+          }
+          
+          const { data: blog, error: blogError } = await supabaseAdmin
+            .from("public.user_blogs")
+            .select("*")
+            .eq("user_id", user.id)
+            .eq("repo_name", params.blogName)
+            .single()
 
+          if (blogError || !blog) {
+            return new Response(
+              JSON.stringify({ error: "Blog not found" }),
+              { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            )
+          }
+
+          // Initialize GitHub client with user token
+          const octokit = new Octokit({ auth: tokenData.secret })
+          
+          // Format post date and filename
+          const date = new Date()
+          const dateStr = date.toISOString().split('T')[0]
+          const filename = `_posts/${dateStr}-${params.slug}.md`
+          
+          // Create Jekyll front matter
+          const frontMatter = [
+            '---',
+            `layout: post`,
+            `title: "${params.title}"`,
+            `date: ${date.toISOString()}`,
+            `categories: ${params.categories || ''}`,
+            '---',
+            '',
+            params.content
+          ].join('\n')
+
+          try {
+            // Commit post to repository
+            const [owner, repo] = blog.repo_full_name.split('/')
+            
+            await octokit.rest.repos.createOrUpdateFileContents({
+              owner,
+              repo,
+              path: filename,
+              message: `Add new post: ${params.title}`,
+              // Use native Deno base64 encoding instead of Buffer
+              content: base64Encode(new TextEncoder().encode(frontMatter))
+            })
+
+            return new Response(
+              JSON.stringify({ 
+                success: true, 
+                post: {
+                  title: params.title,
+                  date: dateStr,
+                  url: `${blog.repo_url}/blob/main/${filename}`
+                }
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            )
+          } catch (unknownError) {
+            const error = errorWithMessage(unknownError);
+            console.error("GitHub API error:", error);
+            return new Response(
+              JSON.stringify({ error: error.message || "Failed to create post" }),
+              { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        } catch (unknownError) {
+          const error = errorWithMessage(unknownError);
+          console.error("Error:", error);
           return new Response(
-            JSON.stringify({ 
-              success: true, 
-              post: {
-                title: params.title,
-                date: dateStr,
-                url: `${blog.repo_url}/blob/main/${filename}`
-              }
-            }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          )
-        } catch (error: any) {
-          console.error("GitHub API error:", error)
-          return new Response(
-            JSON.stringify({ error: error.message || "Failed to create post" }),
+            JSON.stringify({ error: error.message || "Internal server error" }),
             { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          )
+          );
         }
       }
 
@@ -589,14 +668,15 @@ Deno.serve(async (req: Request) => {
         return new Response(
           JSON.stringify({ error: "Unknown action" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        )
+        );
     }
-  } catch (error: any) {
-    console.error("Error:", error)
-  return new Response(
+  } catch (unknownError) {
+    const error = errorWithMessage(unknownError);
+    console.error("Error:", error);
+    return new Response(
       JSON.stringify({ error: error.message || "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  )
+    );
   }
 })
 
