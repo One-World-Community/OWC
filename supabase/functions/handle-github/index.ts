@@ -13,8 +13,8 @@ const GITHUB_OAUTH_URL = "https://github.com/login/oauth/authorize"
 const GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
 
 // Your template repo details (replace with your actual values)
-const TEMPLATE_OWNER = "your-username-or-org"
-const TEMPLATE_REPO = "jekyll-blog-template"
+const TEMPLATE_OWNER = "One-World-Community"
+const TEMPLATE_REPO = "owc-blog-template"
 
 console.log("Hello from Functions!")
 
