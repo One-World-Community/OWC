@@ -208,7 +208,7 @@ Deno.serve(async (req: Request) => {
         }
 
         // Get user info from GitHub
-        const octokit = new Octokit({ auth: tokenData.access_token })
+        const octokit = new Octokit({ auth: `Bearer ${tokenData.access_token}` })
         const { data: githubUser } = await octokit.rest.users.getAuthenticated()
 
         // Store access token in Vault
@@ -316,9 +316,14 @@ Deno.serve(async (req: Request) => {
           try {
             const { data: vaultResponse, error: tokenError } = await supabaseAdmin
               .rpc('vault_get_secret', { secret_id: connection.access_token_id })
-              .single() as { data: VaultSecret | null, error: any }
+              .single<VaultSecret>();
             
             console.log("Token fetch result:", tokenError ? "Error" : "Success")
+            console.log("Vault response structure:", {
+              hasData: !!vaultResponse,
+              keys: vaultResponse ? Object.keys(vaultResponse) : [],
+              secretLength: vaultResponse?.secret?.length,
+            });
             
             if (tokenError) {
               console.error("Error fetching token:", JSON.stringify({
@@ -331,28 +336,56 @@ Deno.serve(async (req: Request) => {
                 JSON.stringify({ 
                   error: "Error fetching GitHub token",
                   details: tokenError.message,
-                  hint: "You may need to create the vault_get_secret RPC function. See the README.md for instructions."
+                  hint: "Make sure the vault_get_secret function is accessible"
                 }),
                 { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
               )
             }
     
             if (!vaultResponse || !vaultResponse.secret) {
-              console.error("No GitHub token found in vault for token ID:", connection.access_token_id)
+              console.error("No GitHub token or secret found in vault for token ID:", connection.access_token_id)
               return new Response(
-                JSON.stringify({ error: "GitHub token not found" }),
+                JSON.stringify({ error: "GitHub token not found or failed to decrypt" }),
                 { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
               )
             }
 
             // Clean and format the token
             const cleanToken = cleanGitHubToken(vaultResponse.secret);
-            console.log("Token length after cleaning:", cleanToken.length);
+            console.log("Raw token details:", {
+              length: vaultResponse.secret.length,
+              prefix: vaultResponse.secret.substring(0, 4),
+              isBase64: /^[A-Za-z0-9+/=]+$/.test(vaultResponse.secret),
+              containsGho: vaultResponse.secret.includes('gho_'),
+              containsBearer: vaultResponse.secret.toLowerCase().includes('bearer')
+            });
+            console.log("Cleaned token details:", {
+              length: cleanToken.length,
+              prefix: cleanToken.substring(0, 4),
+              isBase64: /^[A-Za-z0-9+/=]+$/.test(cleanToken),
+              containsGho: cleanToken.includes('gho_'),
+              containsBearer: cleanToken.toLowerCase().includes('bearer')
+            });
+
+            // Try to decode if it looks like base64
+            if (/^[A-Za-z0-9+/=]+$/.test(cleanToken)) {
+              try {
+                const decoded = new TextDecoder().decode(base64Decode(cleanToken));
+                console.log("Attempted base64 decode details:", {
+                  length: decoded.length,
+                  prefix: decoded.substring(0, 4),
+                  containsGho: decoded.includes('gho_'),
+                  containsBearer: decoded.toLowerCase().includes('bearer')
+                });
+              } catch (e) {
+                console.log("Failed to decode as base64");
+              }
+            }
             
             // Initialize GitHub client with user token
             console.log("Initializing Octokit with GitHub token");
             const octokit = new Octokit({
-              auth: `token ${cleanToken}`,
+              auth: cleanToken,  // Let Octokit handle the auth header
               previews: ["baptiste"]  // Enable template repository preview
             });
             
@@ -594,9 +627,14 @@ Deno.serve(async (req: Request) => {
           try {
             const { data: vaultResponse, error: tokenError } = await supabaseAdmin
               .rpc('vault_get_secret', { secret_id: connection.access_token_id })
-              .single() as { data: VaultSecret | null, error: any }
+              .single<VaultSecret>();
             
             console.log("Token fetch result:", tokenError ? "Error" : "Success")
+            console.log("Vault response structure:", {
+              hasData: !!vaultResponse,
+              keys: vaultResponse ? Object.keys(vaultResponse) : [],
+              secretLength: vaultResponse?.secret?.length,
+            });
             
             if (tokenError) {
               console.error("Error fetching token:", JSON.stringify({
@@ -609,28 +647,56 @@ Deno.serve(async (req: Request) => {
                 JSON.stringify({ 
                   error: "Error fetching GitHub token",
                   details: tokenError.message,
-                  hint: "You may need to create the vault_get_secret RPC function. See the README.md for instructions."
+                  hint: "Make sure the vault_get_secret function is accessible"
                 }),
                 { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
               )
             }
     
             if (!vaultResponse || !vaultResponse.secret) {
-              console.error("No GitHub token found in vault for token ID:", connection.access_token_id)
+              console.error("No GitHub token or secret found in vault for token ID:", connection.access_token_id)
               return new Response(
-                JSON.stringify({ error: "GitHub token not found" }),
+                JSON.stringify({ error: "GitHub token not found or failed to decrypt" }),
                 { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
               )
             }
 
             // Clean and format the token
             const cleanToken = cleanGitHubToken(vaultResponse.secret);
-            console.log("Token length after cleaning:", cleanToken.length);
+            console.log("Raw token details:", {
+              length: vaultResponse.secret.length,
+              prefix: vaultResponse.secret.substring(0, 4),
+              isBase64: /^[A-Za-z0-9+/=]+$/.test(vaultResponse.secret),
+              containsGho: vaultResponse.secret.includes('gho_'),
+              containsBearer: vaultResponse.secret.toLowerCase().includes('bearer')
+            });
+            console.log("Cleaned token details:", {
+              length: cleanToken.length,
+              prefix: cleanToken.substring(0, 4),
+              isBase64: /^[A-Za-z0-9+/=]+$/.test(cleanToken),
+              containsGho: cleanToken.includes('gho_'),
+              containsBearer: cleanToken.toLowerCase().includes('bearer')
+            });
+
+            // Try to decode if it looks like base64
+            if (/^[A-Za-z0-9+/=]+$/.test(cleanToken)) {
+              try {
+                const decoded = new TextDecoder().decode(base64Decode(cleanToken));
+                console.log("Attempted base64 decode details:", {
+                  length: decoded.length,
+                  prefix: decoded.substring(0, 4),
+                  containsGho: decoded.includes('gho_'),
+                  containsBearer: decoded.toLowerCase().includes('bearer')
+                });
+              } catch (e) {
+                console.log("Failed to decode as base64");
+              }
+            }
             
             // Initialize GitHub client with user token
             console.log("Initializing Octokit with GitHub token");
             const octokit = new Octokit({
-              auth: `token ${cleanToken}`
+              auth: cleanToken  // Let Octokit handle the auth header
             });
             
             // Verify token works by getting authenticated user
