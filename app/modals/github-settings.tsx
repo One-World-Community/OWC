@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ActivityIndicator, Alert, ScrollView, Touchable
 import { Stack } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import GitHubAuth from '../components/GitHubAuth';
+import BlogSetup from '../components/BlogSetup';
 import { useTheme } from '../../lib/theme';
 
 export default function GitHubSettingsModal() {
@@ -59,7 +60,7 @@ export default function GitHubSettingsModal() {
   const handleGitHubSuccess = (username: string) => {
     setGithubUsername(username);
     Alert.alert('Success', `Connected to GitHub as ${username}`);
-    // Refresh blogs
+    // Refresh connection and blogs
     checkGitHubConnection();
   };
 
@@ -67,35 +68,13 @@ export default function GitHubSettingsModal() {
     Alert.alert('Error', `Failed to connect to GitHub: ${error}`);
   };
 
-  const createNewBlog = async () => {
-    try {
-      setLoading(true);
-      
-      // Generate a unique name based on timestamp
-      const blogName = `blog-${Date.now()}`;
-      
-      const { data, error } = await supabase.functions.invoke('handle-github', {
-        body: {
-          action: 'create-blog',
-          params: {
-            name: blogName,
-            description: 'My personal blog created with OWC',
-            blogTitle: 'My OWC Blog'
-          }
-        }
-      });
-      
-      if (error) throw error;
-      
-      if (data?.success) {
-        Alert.alert('Success', `Blog created at ${data.blog.url}`);
-        checkGitHubConnection();
-      }
-    } catch (error) {
-      Alert.alert('Error', `Failed to create blog: ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      setLoading(false);
-    }
+  const handleBlogSuccess = (blogUrl: string) => {
+    Alert.alert('Blog Created', `Your blog has been created successfully! It will be available at ${blogUrl} once GitHub Pages deployment is complete.`);
+    checkGitHubConnection();
+  };
+
+  const handleBlogError = (error: string) => {
+    Alert.alert('Error', `Failed to create blog: ${error}`);
   };
 
   return (
@@ -122,16 +101,17 @@ export default function GitHubSettingsModal() {
                   </View>
                 ))
               ) : (
-                <Text style={{ color: colors.textSecondary }}>No blogs yet. Create one to get started!</Text>
+                <Text style={{ color: colors.textSecondary }}>No blogs yet. Create one below to get started!</Text>
               )}
               
-              <TouchableOpacity 
-                style={[styles.button, { backgroundColor: colors.primary }]} 
-                onPress={createNewBlog}>
-                <Text style={[styles.buttonText, { color: colors.card }]}>Create New Blog</Text>
-              </TouchableOpacity>
+              <BlogSetup 
+                onSuccess={handleBlogSuccess}
+                onError={handleBlogError}
+                colors={colors}
+              />
               
-              <View style={styles.buttonContainer}>
+              <View style={styles.sectionContainer}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>GitHub Connection</Text>
                 <GitHubAuth 
                   onSuccess={handleGitHubSuccess}
                   onError={handleGitHubError}
@@ -197,6 +177,9 @@ const styles = StyleSheet.create({
     marginTop: 30,
     marginBottom: 10,
   },
+  sectionContainer: {
+    marginTop: 30,
+  },
   blogItem: {
     padding: 15,
     borderWidth: 1,
@@ -210,16 +193,5 @@ const styles = StyleSheet.create({
   blogUrl: {
     fontSize: 14,
     marginTop: 5,
-  },
-  button: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: '500',
   },
 }); 

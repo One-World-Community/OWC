@@ -46,34 +46,50 @@ export default function GitHubToggle({ colors }: GitHubToggleProps) {
     }
   };
 
-  const handleConnect = () => {
+  const navigateToGitHubSettings = () => {
     router.push('/modals/github-settings');
   };
 
   const handleRevoke = async () => {
-    try {
-      setLoading(true);
-      
-      // Call function to revoke GitHub access
-      const { data, error } = await supabase.functions.invoke('handle-github', {
-        body: {
-          action: 'revoke-access'
+    Alert.alert(
+      'Revoke GitHub Access',
+      'Are you sure you want to disconnect from GitHub? This will remove your ability to manage blogs.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Revoke',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              
+              // Call function to revoke GitHub access
+              const { data, error } = await supabase.functions.invoke('handle-github', {
+                body: {
+                  action: 'revoke-access'
+                }
+              });
+              
+              if (error) throw error;
+              
+              if (data?.success) {
+                setIsConnected(false);
+                setUsername(null);
+                Alert.alert('Success', 'GitHub connection has been revoked');
+              }
+            } catch (error) {
+              console.error('Error revoking GitHub access:', error);
+              Alert.alert('Error', `Failed to revoke GitHub access: ${error instanceof Error ? error.message : String(error)}`);
+            } finally {
+              setLoading(false);
+            }
+          }
         }
-      });
-      
-      if (error) throw error;
-      
-      if (data?.success) {
-        setIsConnected(false);
-        setUsername(null);
-        Alert.alert('Success', 'GitHub connection has been revoked');
-      }
-    } catch (error) {
-      console.error('Error revoking GitHub access:', error);
-      Alert.alert('Error', `Failed to revoke GitHub access: ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      setLoading(false);
-    }
+      ]
+    );
   };
 
   if (loading) {
@@ -89,24 +105,32 @@ export default function GitHubToggle({ colors }: GitHubToggleProps) {
   }
 
   return (
-    <TouchableOpacity 
-      style={styles.menuItem}
-      onPress={isConnected ? handleRevoke : handleConnect}>
-      <View style={styles.menuItemContent}>
-        <Ionicons name="logo-github" size={24} color={colors.textSecondary} />
-        <Text style={[styles.menuText, { color: colors.text }]}>
-          GitHub {isConnected ? `(${username || 'Connected'})` : ''}
-        </Text>
-        <View style={styles.iconContainer}>
-          {isConnected ? (
-            <Ionicons name="close-circle" size={20} color={colors.error} />
-          ) : (
-            <Ionicons name="add-circle" size={20} color={colors.primary} />
-          )}
-          <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} style={styles.chevron} />
+    <View>
+      <TouchableOpacity 
+        style={styles.menuItem}
+        onPress={navigateToGitHubSettings}>
+        <View style={styles.menuItemContent}>
+          <Ionicons name="logo-github" size={24} color={colors.textSecondary} />
+          <Text style={[styles.menuText, { color: colors.text }]}>
+            GitHub {isConnected ? `(${username || 'Connected'})` : ''}
+          </Text>
+          <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
         </View>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+      
+      {isConnected && (
+        <TouchableOpacity 
+          style={[styles.menuItem, styles.subMenuItem]}
+          onPress={handleRevoke}>
+          <View style={styles.menuItemContent}>
+            <Ionicons name="close-circle" size={20} color={colors.error} style={styles.subMenuIcon} />
+            <Text style={[styles.menuText, styles.subMenuText, { color: colors.error }]}>
+              Disconnect GitHub
+            </Text>
+          </View>
+        </TouchableOpacity>
+      )}
+    </View>
   );
 }
 
@@ -122,6 +146,16 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     marginLeft: 12,
+  },
+  subMenuItem: {
+    paddingVertical: 8,
+    paddingLeft: 36,
+  },
+  subMenuText: {
+    fontSize: 14,
+  },
+  subMenuIcon: {
+    marginLeft: 8,
   },
   iconContainer: {
     flexDirection: 'row',
