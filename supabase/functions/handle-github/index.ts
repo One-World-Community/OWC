@@ -345,12 +345,31 @@ Deno.serve(async (req: Request) => {
               )
             }
 
+            // Clean and format the token
             const cleanToken = cleanGitHubToken(vaultResponse.secret);
-            const tokenData = { secret: cleanToken }
+            console.log("Token length after cleaning:", cleanToken.length);
             
             // Initialize GitHub client with user token
             console.log("Initializing Octokit with GitHub token");
-            const octokit = new Octokit({ auth: tokenData.secret });
+            const octokit = new Octokit({
+              auth: `token ${cleanToken}`,
+              previews: ["baptiste"]  // Enable template repository preview
+            });
+            
+            // Verify token works by getting authenticated user
+            try {
+              const { data: authUser } = await octokit.rest.users.getAuthenticated();
+              console.log("Successfully authenticated as GitHub user:", authUser.login);
+            } catch (authError) {
+              console.error("Failed to authenticate with GitHub:", authError);
+              return new Response(
+                JSON.stringify({ 
+                  error: "Invalid GitHub token", 
+                  details: "Token authentication failed. Please reconnect your GitHub account."
+                }),
+                { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
+            }
             
             // Create repository from template
             const { name, description } = params;
@@ -604,9 +623,31 @@ Deno.serve(async (req: Request) => {
               )
             }
 
+            // Clean and format the token
             const cleanToken = cleanGitHubToken(vaultResponse.secret);
-            const tokenData = { secret: cleanToken }
+            console.log("Token length after cleaning:", cleanToken.length);
             
+            // Initialize GitHub client with user token
+            console.log("Initializing Octokit with GitHub token");
+            const octokit = new Octokit({
+              auth: `token ${cleanToken}`
+            });
+            
+            // Verify token works by getting authenticated user
+            try {
+              const { data: authUser } = await octokit.rest.users.getAuthenticated();
+              console.log("Successfully authenticated as GitHub user:", authUser.login);
+            } catch (authError) {
+              console.error("Failed to authenticate with GitHub:", authError);
+              return new Response(
+                JSON.stringify({ 
+                  error: "Invalid GitHub token", 
+                  details: "Token authentication failed. Please reconnect your GitHub account."
+                }),
+                { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
+            }
+
             const { data: blog, error: blogError } = await supabaseAdmin
               .from("public.user_blogs")
               .select("*")
@@ -621,9 +662,6 @@ Deno.serve(async (req: Request) => {
               )
             }
 
-            // Initialize GitHub client with user token
-            const octokit = new Octokit({ auth: tokenData.secret })
-            
             // Format post date and filename
             const date = new Date()
             const dateStr = date.toISOString().split('T')[0]
