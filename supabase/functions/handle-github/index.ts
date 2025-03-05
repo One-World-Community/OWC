@@ -424,6 +424,9 @@ Deno.serve(async (req: Request) => {
               });
               
               console.log("Successfully created repo from template:", repo.html_url);
+              
+              // Define GitHub Pages URL here, after repo creation but before setup attempts
+              const githubPagesUrl = `https://${connection.github_username}.github.io/${name}/`;
 
               try {
                 // Wait a moment to ensure repo is fully created before configuring
@@ -503,6 +506,7 @@ Deno.serve(async (req: Request) => {
                       repo_name: name,
                       repo_full_name: `${connection.github_username}/${name}`,
                       repo_url: repo.html_url,
+                      blog_url: githubPagesUrl,
                       is_setup_complete: true
                     });
                   console.log("Successfully stored blog info in database");
@@ -511,7 +515,6 @@ Deno.serve(async (req: Request) => {
                   // Continue even if database storage fails
                 }
 
-                const githubPagesUrl = `https://${connection.github_username}.github.io/${name}/`;
                 console.log("Blog creation completed successfully. GitHub Pages URL:", githubPagesUrl);
                 
                 return new Response(
@@ -537,7 +540,7 @@ Deno.serve(async (req: Request) => {
                     blog: {
                       name,
                       url: repo.html_url,
-                      github_pages_url: `https://${connection.github_username}.github.io/${name}/`
+                      github_pages_url: githubPagesUrl
                     }
                   }),
                   { headers: { ...corsHeaders, "Content-Type": "application/json" } }
