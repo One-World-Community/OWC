@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Platform, Animated, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Platform, Animated, ScrollView, SafeAreaView } from 'react-native';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -64,99 +64,62 @@ export default function SubscriptionsScreen() {
 
   if (error) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={[styles.container, { backgroundColor: '#ffffff' }]}>
         <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
         <TouchableOpacity 
           style={[styles.retryButton, { backgroundColor: colors.primary }]} 
           onPress={loadSubscriptions}>
           <Text style={[styles.retryButtonText, { color: colors.card }]}>Retry</Text>
         </TouchableOpacity>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <GestureHandlerRootView style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView 
-        style={styles.scrollContainer}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
-        <View style={styles.section}>
-          <View style={[styles.sectionHeader, { backgroundColor: colors.card }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Topics</Text>
-            <TouchableOpacity 
-              style={styles.editButton}
-              onPress={() => router.push('/modals/manage-topics')}>
-              <Ionicons name="settings-outline" size={24} color={colors.primary} />
-            </TouchableOpacity>
-          </View>
-          <FlatList
-            data={topics}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            renderItem={({ item }) => (
-              <TouchableOpacity style={[styles.topicCard, { backgroundColor: colors.card }]}>
-                <Text style={styles.topicIcon}>{item.icon}</Text>
-                <Text style={[styles.topicName, { color: colors.text }]}>{item.name}</Text>
-              </TouchableOpacity>
-            )}
-            keyExtractor={item => item.id}
-            contentContainerStyle={styles.topicsList}
-          />
-        </View>
-
-        <View style={styles.section}>
-          <View style={[styles.sectionHeader, { backgroundColor: colors.card }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>RSS Feeds</Text>
-            <TouchableOpacity 
-              style={styles.addButton}
-              onPress={() => router.push('/modals/add-feed')}>
-              <Ionicons name="add" size={24} color={colors.primary} />
-            </TouchableOpacity>
-          </View>
-          
-          {feeds.map(item => (
-            Platform.OS === 'web' ? (
+    <SafeAreaView style={[styles.container, { backgroundColor: '#ffffff' }]}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <ScrollView 
+          style={styles.scrollContainer}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}>
+          <View style={styles.section}>
+            <View style={[styles.sectionHeader, { backgroundColor: colors.card }]}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Topics</Text>
               <TouchableOpacity 
-                key={item.id}
-                style={[styles.feedItem, { backgroundColor: colors.card }]}
-                onPress={() => handleFeedPress(item)}>
-                <Image source={{ uri: item.icon_url }} style={styles.feedIcon} />
-                <View style={styles.feedInfo}>
-                  <Text style={[styles.feedName, { color: colors.text }]}>{item.name}</Text>
-                  <Text style={[styles.feedUrl, { color: colors.textSecondary }]}>{item.url}</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.unsubscribeButton}
-                  onPress={() => handleUnsubscribeFeed(item.id)}>
-                  <Ionicons name="trash-outline" size={20} color={colors.error} />
-                </TouchableOpacity>
+                style={styles.editButton}
+                onPress={() => router.push('/modals/manage-topics')}>
+                <Ionicons name="settings-outline" size={24} color={colors.primary} />
               </TouchableOpacity>
-            ) : (
-              <Swipeable
-                key={item.id}
-                renderRightActions={(progress, dragX) => {
-                  const scale = dragX.interpolate({
-                    inputRange: [-100, 0],
-                    outputRange: [1, 0],
-                    extrapolate: 'clamp',
-                  });
-                  return (
-                    <TouchableOpacity
-                      style={styles.deleteAction}
-                      onPress={() => handleUnsubscribeFeed(item.id)}>
-                      <Animated.View
-                        style={[
-                          styles.deleteActionContent,
-                          { transform: [{ scale }] }
-                        ]}>
-                        <Ionicons name="trash-outline" size={24} color="#fff" />
-                        <Text style={styles.deleteActionText}>Delete</Text>
-                      </Animated.View>
-                    </TouchableOpacity>
-                  );
-                }}>
+            </View>
+            <FlatList
+              data={topics}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              renderItem={({ item }) => (
+                <TouchableOpacity style={[styles.topicCard, { backgroundColor: colors.card }]}>
+                  <Text style={styles.topicIcon}>{item.icon}</Text>
+                  <Text style={[styles.topicName, { color: colors.text }]}>{item.name}</Text>
+                </TouchableOpacity>
+              )}
+              keyExtractor={item => item.id}
+              contentContainerStyle={styles.topicsList}
+            />
+          </View>
+
+          <View style={styles.section}>
+            <View style={[styles.sectionHeader, { backgroundColor: colors.card }]}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>RSS Feeds</Text>
+              <TouchableOpacity 
+                style={styles.addButton}
+                onPress={() => router.push('/modals/add-feed')}>
+                <Ionicons name="add" size={24} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+            
+            {feeds.map(item => (
+              Platform.OS === 'web' ? (
                 <TouchableOpacity 
+                  key={item.id}
                   style={[styles.feedItem, { backgroundColor: colors.card }]}
                   onPress={() => handleFeedPress(item)}>
                   <Image source={{ uri: item.icon_url }} style={styles.feedIcon} />
@@ -164,30 +127,69 @@ export default function SubscriptionsScreen() {
                     <Text style={[styles.feedName, { color: colors.text }]}>{item.name}</Text>
                     <Text style={[styles.feedUrl, { color: colors.textSecondary }]}>{item.url}</Text>
                   </View>
+                  <TouchableOpacity
+                    style={styles.unsubscribeButton}
+                    onPress={() => handleUnsubscribeFeed(item.id)}>
+                    <Ionicons name="trash-outline" size={20} color={colors.error} />
+                  </TouchableOpacity>
                 </TouchableOpacity>
-              </Swipeable>
-            )
-          ))}
-          
-          {loading && (
-            <View style={styles.loadingContainer}>
-              <Text style={{ color: colors.textSecondary }}>Loading feeds...</Text>
-            </View>
-          )}
-          
-          {!loading && feeds.length === 0 && (
-            <View style={styles.emptyContainer}>
-              <Text style={{ color: colors.textSecondary }}>No feeds subscribed</Text>
-              <TouchableOpacity 
-                style={[styles.emptyButton, { backgroundColor: colors.primary }]}
-                onPress={() => router.push('/modals/add-feed')}>
-                <Text style={{ color: colors.card }}>Add a feed</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-      </ScrollView>
-    </GestureHandlerRootView>
+              ) : (
+                <Swipeable
+                  key={item.id}
+                  renderRightActions={(progress, dragX) => {
+                    const scale = dragX.interpolate({
+                      inputRange: [-100, 0],
+                      outputRange: [1, 0],
+                      extrapolate: 'clamp',
+                    });
+                    return (
+                      <TouchableOpacity
+                        style={styles.deleteAction}
+                        onPress={() => handleUnsubscribeFeed(item.id)}>
+                        <Animated.View
+                          style={[
+                            styles.deleteActionContent,
+                            { transform: [{ scale }] }
+                          ]}>
+                          <Ionicons name="trash-outline" size={24} color="#fff" />
+                          <Text style={styles.deleteActionText}>Delete</Text>
+                        </Animated.View>
+                      </TouchableOpacity>
+                    );
+                  }}>
+                  <TouchableOpacity 
+                    style={[styles.feedItem, { backgroundColor: colors.card }]}
+                    onPress={() => handleFeedPress(item)}>
+                    <Image source={{ uri: item.icon_url }} style={styles.feedIcon} />
+                    <View style={styles.feedInfo}>
+                      <Text style={[styles.feedName, { color: colors.text }]}>{item.name}</Text>
+                      <Text style={[styles.feedUrl, { color: colors.textSecondary }]}>{item.url}</Text>
+                    </View>
+                  </TouchableOpacity>
+                </Swipeable>
+              )
+            ))}
+            
+            {loading && (
+              <View style={styles.loadingContainer}>
+                <Text style={{ color: colors.textSecondary }}>Loading feeds...</Text>
+              </View>
+            )}
+            
+            {!loading && feeds.length === 0 && (
+              <View style={styles.emptyContainer}>
+                <Text style={{ color: colors.textSecondary }}>No feeds subscribed</Text>
+                <TouchableOpacity 
+                  style={[styles.emptyButton, { backgroundColor: colors.primary }]}
+                  onPress={() => router.push('/modals/add-feed')}>
+                  <Text style={{ color: colors.card }}>Add a feed</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      </GestureHandlerRootView>
+    </SafeAreaView>
   );
 }
 

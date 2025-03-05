@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, ActivityIndicator, SafeAreaView } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/auth';
@@ -82,15 +82,15 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={[styles.container, { backgroundColor: '#ffffff' }]}>
         <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (error) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={[styles.container, { backgroundColor: '#ffffff' }]}>
         <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
         <TouchableOpacity 
           style={[styles.retryButton, { backgroundColor: colors.primary }]}
@@ -101,127 +101,129 @@ export default function ProfileScreen() {
           }}>
           <Text style={[styles.retryButtonText, { color: colors.card }]}>Retry</Text>
         </TouchableOpacity>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <ScrollView 
-      style={[styles.container, { backgroundColor: colors.background }]} 
-      contentContainerStyle={styles.contentContainer}>
-      <View style={[styles.header, { backgroundColor: colors.card }]}>
-        <View style={styles.profileHeader}>
-          <Image
-            source={{ 
-              uri: profile?.avatar_url || 
-                'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400'
-            }}
-            style={styles.profileImage}
-          />
-          <Text style={[styles.profileName, { color: colors.text }]}>
-            {profile?.full_name || 'Anonymous User'}
-          </Text>
-          <Text style={[styles.profileEmail, { color: colors.textSecondary }]}>
-            {session?.user.email}
-          </Text>
-        </View>
-
-        <TouchableOpacity 
-          style={[styles.editButton, { backgroundColor: colors.primary }]}
-          onPress={() => router.push('/modals/edit-profile')}>
-          <Text style={[styles.editButtonText, { color: colors.card }]}>
-            Edit Profile
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={[styles.statsContainer, { backgroundColor: colors.card }]}>
-        <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: colors.text }]}>
-            {stats.topics}
-          </Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-            Topics
-          </Text>
-        </View>
-        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: colors.text }]}>
-            {stats.feeds}
-          </Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-            Feeds
-          </Text>
-        </View>
-        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: colors.text }]}>
-            {stats.events}
-          </Text>
-          <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-            Events
-          </Text>
-        </View>
-      </View>
-
-      <View style={[styles.section, { backgroundColor: colors.card }]}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Settings</Text>
-        
-        <TouchableOpacity style={styles.menuItem}>
-          <View style={styles.menuItemContent}>
-            <Ionicons name="notifications-outline" size={24} color={colors.textSecondary} />
-            <Text style={[styles.menuText, { color: colors.text }]}>Notifications</Text>
-            <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.menuItem}>
-          <View style={styles.menuItemContent}>
-            <Ionicons name="globe-outline" size={24} color={colors.textSecondary} />
-            <Text style={[styles.menuText, { color: colors.text }]}>Language</Text>
-            <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.menuItem}
-          onPress={() => {
-            const nextMode = mode === 'light' ? 'dark' : 
-                           mode === 'dark' ? 'system' : 'light';
-            setMode(nextMode);
-          }}>
-          <View style={styles.menuItemContent}>
-            <Ionicons 
-              name={mode === 'system' ? 'phone-portrait-outline' : 
-                    isDark ? 'moon-outline' : 'sunny-outline'} 
-              size={24} 
-              color={colors.textSecondary} 
+    <SafeAreaView style={[styles.container, { backgroundColor: '#ffffff' }]}>
+      <ScrollView 
+        style={{ flex: 1 }} 
+        contentContainerStyle={styles.contentContainer}>
+        <View style={[styles.header, { backgroundColor: colors.card }]}>
+          <View style={styles.profileHeader}>
+            <Image
+              source={{ 
+                uri: profile?.avatar_url || 
+                  'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400'
+              }}
+              style={styles.profileImage}
             />
-            <Text style={[styles.menuText, { color: colors.text }]}>
-              {mode === 'system' ? 'System Theme' :
-               mode === 'dark' ? 'Dark Mode' : 'Light Mode'}
+            <Text style={[styles.profileName, { color: colors.text }]}>
+              {profile?.full_name || 'Anonymous User'}
             </Text>
-            <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
+            <Text style={[styles.profileEmail, { color: colors.textSecondary }]}>
+              {session?.user.email}
+            </Text>
           </View>
-        </TouchableOpacity>
 
-        <TouchableOpacity style={styles.menuItem}>
-          <View style={styles.menuItemContent}>
-            <Ionicons name="shield-checkmark-outline" size={24} color={colors.textSecondary} />
-            <Text style={[styles.menuText, { color: colors.text }]}>Privacy</Text>
-            <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
+          <TouchableOpacity 
+            style={[styles.editButton, { backgroundColor: colors.primary }]}
+            onPress={() => router.push('/modals/edit-profile')}>
+            <Text style={[styles.editButtonText, { color: colors.card }]}>
+              Edit Profile
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.statsContainer, { backgroundColor: colors.card }]}>
+          <View style={styles.statItem}>
+            <Text style={[styles.statNumber, { color: colors.text }]}>
+              {stats.topics}
+            </Text>
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+              Topics
+            </Text>
           </View>
+          <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statNumber, { color: colors.text }]}>
+              {stats.feeds}
+            </Text>
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+              Feeds
+            </Text>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statNumber, { color: colors.text }]}>
+              {stats.events}
+            </Text>
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
+              Events
+            </Text>
+          </View>
+        </View>
+
+        <View style={[styles.section, { backgroundColor: colors.card }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Settings</Text>
+          
+          <TouchableOpacity style={styles.menuItem}>
+            <View style={styles.menuItemContent}>
+              <Ionicons name="notifications-outline" size={24} color={colors.textSecondary} />
+              <Text style={[styles.menuText, { color: colors.text }]}>Notifications</Text>
+              <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.menuItem}>
+            <View style={styles.menuItemContent}>
+              <Ionicons name="globe-outline" size={24} color={colors.textSecondary} />
+              <Text style={[styles.menuText, { color: colors.text }]}>Language</Text>
+              <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.menuItem}
+            onPress={() => {
+              const nextMode = mode === 'light' ? 'dark' : 
+                             mode === 'dark' ? 'system' : 'light';
+              setMode(nextMode);
+            }}>
+            <View style={styles.menuItemContent}>
+              <Ionicons 
+                name={mode === 'system' ? 'phone-portrait-outline' : 
+                      isDark ? 'moon-outline' : 'sunny-outline'} 
+                size={24} 
+                color={colors.textSecondary} 
+              />
+              <Text style={[styles.menuText, { color: colors.text }]}>
+                {mode === 'system' ? 'System Theme' :
+                 mode === 'dark' ? 'Dark Mode' : 'Light Mode'}
+              </Text>
+              <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.menuItem}>
+            <View style={styles.menuItemContent}>
+              <Ionicons name="shield-checkmark-outline" size={24} color={colors.textSecondary} />
+              <Text style={[styles.menuText, { color: colors.text }]}>Privacy</Text>
+              <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
+            </View>
+          </TouchableOpacity>
+
+          <GitHubToggle colors={colors} />
+        </View>
+
+        <TouchableOpacity 
+          style={[styles.logoutButton, { backgroundColor: colors.error }]} 
+          onPress={signOut}>
+          <Text style={styles.logoutButtonText}>Log Out</Text>
         </TouchableOpacity>
-
-        <GitHubToggle colors={colors} />
-      </View>
-
-      <TouchableOpacity 
-        style={[styles.logoutButton, { backgroundColor: colors.error }]} 
-        onPress={signOut}>
-        <Text style={styles.logoutButtonText}>Log Out</Text>
-      </TouchableOpacity>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 

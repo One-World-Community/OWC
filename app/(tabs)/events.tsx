@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Alert, SafeAreaView } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../lib/theme';
@@ -117,19 +117,19 @@ export default function EventsScreen() {
 
   if (error) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={[styles.container, { backgroundColor: '#ffffff' }]}>
         <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
         <TouchableOpacity 
           style={[styles.retryButton, { backgroundColor: colors.primary }]}
           onPress={loadEvents}>
           <Text style={[styles.retryButtonText, { color: colors.card }]}>Retry</Text>
         </TouchableOpacity>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: '#ffffff' }]}>
       <View style={[styles.searchContainer, { 
         backgroundColor: colors.card,
         borderBottomColor: colors.border
@@ -292,7 +292,7 @@ export default function EventsScreen() {
         onPress={() => router.push('/modals/create-event')}>
         <Ionicons name="add" size={24} color={colors.card} />
       </TouchableOpacity>
-    </View>
+    </SafeAreaView>
   );
 }
 

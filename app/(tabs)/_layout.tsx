@@ -49,6 +49,7 @@ export default function TabLayout() {
         name="subscriptions"
         options={{
           title: 'Subscriptions',
+          headerShown: false,
           tabBarIcon: ({ size, color }) => (
             <Ionicons name="bookmark" size={size} color={color} />
           ),
@@ -58,6 +59,7 @@ export default function TabLayout() {
         name="events"
         options={{
           title: 'Events',
+          headerShown: false,
           tabBarIcon: ({ size, color }) => (
             <Ionicons name="calendar" size={size} color={color} />
           ),
@@ -67,6 +69,7 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
+          headerShown: false,
           tabBarIcon: ({ size, color }) => (
             <Ionicons name="person" size={size} color={color} />
           ),
