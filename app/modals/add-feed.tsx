@@ -1,23 +1,31 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, ScrollView, GestureResponderEvent } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/auth';
 import { useTheme } from '../../lib/theme';
 import React from 'react';
-import { fetchFeedItems, discoverFeeds, getWebsiteMetadata, type FeedItem, getFeedMetadata } from '../../lib/feeds';
+import { fetchFeedItems, discoverFeeds, getWebsiteMetadata, type FeedItem, getFeedMetadata, extractFeedFromArticle } from '../../lib/feeds';
 import { supabase } from '../../lib/supabase';
 
 export default function AddFeedScreen() {
   const { session } = useAuth();
   const { colors } = useTheme();
-  const [url, setUrl] = useState('');
+  const params = useLocalSearchParams<{ url?: string }>();
+  const [url, setUrl] = useState(params.url || '');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewItems, setPreviewItems] = useState<FeedItem[]>([]);
   const [discoveredFeeds, setDiscoveredFeeds] = useState<Array<{ url: string; title?: string }>>([]);
   const [selectedFeedUrl, setSelectedFeedUrl] = useState<string | null>(null);
+
+  // Process the URL parameter if provided when component mounts
+  useEffect(() => {
+    if (params.url) {
+      handleUrlChange(params.url);
+    }
+  }, [params.url]);
 
   const handleUrlChange = async (newUrl: string) => {
     setUrl(newUrl);
@@ -36,8 +44,29 @@ export default function AddFeedScreen() {
       return;
     }
 
-    // Otherwise, try to discover feeds
     try {
+      // First, try to extract feed from an article URL
+      const articleFeedInfo = await extractFeedFromArticle(newUrl);
+      
+      if (articleFeedInfo.feedUrl) {
+        // We found a feed from the article URL!
+        setDiscoveredFeeds([{ 
+          url: articleFeedInfo.feedUrl, 
+          title: articleFeedInfo.feedTitle || articleFeedInfo.siteTitle || 'Found Feed' 
+        }]);
+        setSelectedFeedUrl(articleFeedInfo.feedUrl);
+        
+        // If we found a site title from the article, use it for the feed name
+        if (articleFeedInfo.siteTitle) {
+          setName(articleFeedInfo.siteTitle);
+        }
+        
+        // Preview the feed automatically
+        previewFeed(articleFeedInfo.feedUrl);
+        return;
+      }
+      
+      // If we couldn't extract a feed directly, fall back to standard feed discovery
       const feeds = await discoverFeeds(newUrl);
       
       if (feeds.length > 0) {

@@ -590,3 +590,81 @@ export async function getNearbyFeeds(options: {
     throw err;
   }
 }
+
+/**
+ * Extract feed information from an article URL
+ * This helps users add feeds even when they paste an article URL
+ */
+export async function extractFeedFromArticle(articleUrl: string): Promise<{
+  feedUrl: string | null;
+  feedTitle?: string;
+  siteTitle?: string;
+  siteIcon?: string;
+}> {
+  try {
+    // Normalize URL
+    const normalizedUrl = articleUrl.startsWith('http') ? articleUrl : `https://${articleUrl}`;
+    
+    // First, get the base URL of the article
+    const urlObj = new URL(normalizedUrl);
+    const baseUrl = `${urlObj.protocol}//${urlObj.hostname}`;
+    
+    // Fetch the article page
+    const html = await fetchWithCorsProxy(normalizedUrl);
+    const $ = cheerioLoad(html);
+    
+    // Get site metadata
+    const siteTitle = $('title').first().text() || 
+                      $('meta[property="og:site_name"]').attr('content') ||
+                      undefined;
+    
+    const siteIcon = $('link[rel="icon"], link[rel="shortcut icon"]').attr('href') || 
+                     $('link[rel="apple-touch-icon"]').attr('href') || 
+                     undefined;
+    
+    // First strategy: Look for canonical feed links in the article page
+    const feedLinks = $('link[type*="rss"], link[type*="atom"], link[type*="xml"]');
+    
+    if (feedLinks.length > 0) {
+      // Get the first feed link
+      const feedHref = $(feedLinks[0]).attr('href');
+      const feedTitle = $(feedLinks[0]).attr('title');
+      
+      if (feedHref) {
+        // Resolve relative URLs
+        const feedUrl = feedHref.startsWith('http') ? 
+          feedHref : 
+          new URL(feedHref, normalizedUrl).toString();
+          
+        return {
+          feedUrl,
+          feedTitle: feedTitle || undefined,
+          siteTitle,
+          siteIcon: siteIcon ? (siteIcon.startsWith('http') ? siteIcon : new URL(siteIcon, baseUrl).toString()) : undefined
+        };
+      }
+    }
+    
+    // Second strategy: Try to discover feeds from the site root
+    const feeds = await discoverFeeds(baseUrl);
+    
+    if (feeds.length > 0) {
+      return {
+        feedUrl: feeds[0].url,
+        feedTitle: feeds[0].title,
+        siteTitle,
+        siteIcon: siteIcon ? (siteIcon.startsWith('http') ? siteIcon : new URL(siteIcon, baseUrl).toString()) : undefined
+      };
+    }
+    
+    // If we couldn't find any feeds, return null
+    return {
+      feedUrl: null,
+      siteTitle,
+      siteIcon: siteIcon ? (siteIcon.startsWith('http') ? siteIcon : new URL(siteIcon, baseUrl).toString()) : undefined
+    };
+  } catch (error) {
+    console.error('Error extracting feed from article:', error);
+    return { feedUrl: null };
+  }
+}
