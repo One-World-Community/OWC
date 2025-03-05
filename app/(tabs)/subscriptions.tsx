@@ -16,6 +16,7 @@ export default function SubscriptionsScreen() {
   const [feeds, setFeeds] = useState<RssFeed[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (session?.user) {
@@ -60,6 +61,31 @@ export default function SubscriptionsScreen() {
 
   const handleFeedPress = (feed: RssFeed) => {
     router.push(`/feeds/${feed.id}`);
+  };
+
+  const handleImageError = (feedId: string) => {
+    setFailedImages(prev => ({
+      ...prev,
+      [feedId]: true
+    }));
+  };
+
+  const renderFeedIcon = (feed: RssFeed) => {
+    if (failedImages[feed.id]) {
+      return (
+        <View style={[styles.feedIcon, styles.placeholderIcon]}>
+          <Ionicons name="newspaper" size={20} color={colors.textSecondary} />
+        </View>
+      );
+    }
+    
+    return (
+      <Image 
+        source={{ uri: feed.icon_url }} 
+        style={styles.feedIcon}
+        onError={() => handleImageError(feed.id)}
+      />
+    );
   };
 
   if (error) {
@@ -122,7 +148,7 @@ export default function SubscriptionsScreen() {
                   key={item.id}
                   style={[styles.feedItem, { backgroundColor: colors.card }]}
                   onPress={() => handleFeedPress(item)}>
-                  <Image source={{ uri: item.icon_url }} style={styles.feedIcon} />
+                  {renderFeedIcon(item)}
                   <View style={styles.feedInfo}>
                     <Text style={[styles.feedName, { color: colors.text }]}>{item.name}</Text>
                     <Text style={[styles.feedUrl, { color: colors.textSecondary }]}>{item.url}</Text>
@@ -160,7 +186,7 @@ export default function SubscriptionsScreen() {
                   <TouchableOpacity 
                     style={[styles.feedItem, { backgroundColor: colors.card }]}
                     onPress={() => handleFeedPress(item)}>
-                    <Image source={{ uri: item.icon_url }} style={styles.feedIcon} />
+                    {renderFeedIcon(item)}
                     <View style={styles.feedInfo}>
                       <Text style={[styles.feedName, { color: colors.text }]}>{item.name}</Text>
                       <Text style={[styles.feedUrl, { color: colors.textSecondary }]}>{item.url}</Text>
@@ -265,6 +291,11 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 8,
+  },
+  placeholderIcon: {
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   feedInfo: {
     flex: 1,
