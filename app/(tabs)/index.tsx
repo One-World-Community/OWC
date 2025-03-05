@@ -378,6 +378,13 @@ export default function DiscoverScreen() {
           })}
         />
       )}
+      {/* Floating Action Button for creating a new post */}
+      <TouchableOpacity 
+        style={[styles.fab, { backgroundColor: colors.primary }]}
+        onPress={() => router.push('/modals/post-editor')}
+      >
+        <Ionicons name="add" size={24} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -583,5 +590,20 @@ const styles = StyleSheet.create({
   },
   availableTopicDescriptionSelected: {
     color: '#4338ca',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
   },
 });
