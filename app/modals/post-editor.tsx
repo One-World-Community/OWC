@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, SafeAreaView, Alert } from 'react-native';
-import { router, useNavigation } from 'expo-router';
+import { router, useNavigation, Stack } from 'expo-router';
 import { useTheme } from '../../lib/theme';
 import { useAuth } from '../../lib/auth';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -83,6 +83,7 @@ categories: blog
   
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.container}>
         <PostEditor
           title={title}

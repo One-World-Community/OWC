@@ -183,7 +183,7 @@ export default function PostEditor({
         <TouchableOpacity onPress={onCancel} style={styles.headerButton}>
           <Text style={[styles.headerButtonText, { color: colors.text }]}>Cancel</Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>New post</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Create Post</Text>
         <TouchableOpacity onPress={onSubmit} style={styles.headerButton}>
           <Text style={[styles.headerButtonText, { color: colors.primary }]}>Next</Text>
         </TouchableOpacity>
