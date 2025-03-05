@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import GitHubAuth from '../components/GitHubAuth';
 import BlogSetup from '../components/BlogSetup';
 import { useTheme } from '../../lib/theme';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function GitHubSettingsModal() {
   const [loading, setLoading] = useState(true);
@@ -38,17 +39,39 @@ export default function GitHubSettingsModal() {
         return; // No connection, so don't try to fetch blogs
       }
       
-      // Fetch blogs if connected
-      const { data, error } = await supabase.functions.invoke('handle-github', {
-        body: {
-          action: 'get-blogs'
+      // Fetch blogs directly from the user_blogs table
+      const { data: userBlogs, error: blogsError } = await supabase
+        .from('user_blogs')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (blogsError) {
+        console.error('Error fetching user blogs:', blogsError);
+      }
+      
+      if (userBlogs && userBlogs.length > 0) {
+        setBlogs(userBlogs);
+      } else {
+        // As a fallback, try the cloud function approach
+        try {
+          const { data, error } = await supabase.functions.invoke('handle-github', {
+            body: {
+              action: 'get-blogs'
+            }
+          });
+          
+          if (error) throw error;
+          
+          if (data?.blogs) {
+            setBlogs(data.blogs);
+          }
+        } catch (cloudError) {
+          console.error('Error fetching blogs from cloud function:', cloudError);
+          // If both approaches fail, at least show what we got from the database
+          if (userBlogs) {
+            setBlogs(userBlogs);
+          }
         }
-      });
-      
-      if (error) throw error;
-      
-      if (data?.blogs) {
-        setBlogs(data.blogs);
       }
     } catch (error) {
       console.error('Error checking GitHub connection:', error);
@@ -77,6 +100,67 @@ export default function GitHubSettingsModal() {
     Alert.alert('Error', `Failed to create blog: ${error}`);
   };
 
+  const handleRevokeGitHub = async () => {
+    Alert.alert(
+      'Revoke GitHub Access',
+      'Are you sure you want to disconnect from GitHub? This will remove your ability to manage blogs.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Revoke',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              
+              // Call function to revoke GitHub access
+              const { data, error } = await supabase.functions.invoke('handle-github', {
+                body: {
+                  action: 'revoke-access'
+                }
+              });
+              
+              if (error) throw error;
+              
+              if (data?.success) {
+                // Clean up local database state
+                try {
+                  // Remove the GitHub connection
+                  await supabase
+                    .from('github_connections')
+                    .delete()
+                    .is('user_id', null);
+                    
+                  // Note: We don't delete user_blogs records as they 
+                  // remain in the database for historical purposes,
+                  // but we clear them from the UI state
+                  
+                  setGithubUsername(null);
+                  setBlogs([]);
+                  Alert.alert('Success', 'GitHub connection has been revoked');
+                } catch (cleanupError) {
+                  console.error('Error cleaning up after revocation:', cleanupError);
+                  // Still consider it a success if the cloud function succeeded
+                  setGithubUsername(null);
+                  setBlogs([]);
+                  Alert.alert('Success', 'GitHub connection has been revoked, but there was an error cleaning up local data.');
+                }
+              }
+            } catch (error) {
+              console.error('Error revoking GitHub access:', error);
+              Alert.alert('Error', `Failed to revoke GitHub access: ${error instanceof Error ? error.message : String(error)}`);
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ title: 'GitHub Integration' }} />
@@ -92,31 +176,56 @@ export default function GitHubSettingsModal() {
               <Text style={[styles.title, { color: colors.text }]}>Connected to GitHub</Text>
               <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Username: {githubUsername}</Text>
               
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Your Blogs</Text>
-              {blogs.length > 0 ? (
-                blogs.map((blog) => (
-                  <View key={blog.id} style={[styles.blogItem, { borderColor: colors.border }]}>
-                    <Text style={[styles.blogName, { color: colors.text }]}>{blog.repo_name}</Text>
-                    <Text style={[styles.blogUrl, { color: colors.primary }]}>{blog.repo_url}</Text>
-                  </View>
-                ))
-              ) : (
-                <Text style={{ color: colors.textSecondary }}>No blogs yet. Create one below to get started!</Text>
-              )}
-              
-              <BlogSetup 
-                onSuccess={handleBlogSuccess}
-                onError={handleBlogError}
-                colors={colors}
-              />
-              
-              <View style={styles.sectionContainer}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>GitHub Connection</Text>
-                <GitHubAuth 
-                  onSuccess={handleGitHubSuccess}
-                  onError={handleGitHubError}
-                />
+              <View style={styles.buttonContainer}>
+                <TouchableOpacity 
+                  style={[styles.revokeButton, { backgroundColor: colors.error }]}
+                  onPress={handleRevokeGitHub}
+                >
+                  <Ionicons name="close-circle" size={20} color="#ffffff" style={styles.buttonIcon} />
+                  <Text style={styles.revokeButtonText}>Revoke GitHub Access</Text>
+                </TouchableOpacity>
               </View>
+              
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Your Blog</Text>
+              
+              {blogs.length > 0 ? (
+                <View>
+                  {blogs.map((blog) => (
+                    <View key={blog.id} style={[styles.blogItem, { borderColor: colors.border }]}>
+                      <Text style={[styles.blogName, { color: colors.text }]}>
+                        {blog.title || blog.repo_name}
+                      </Text>
+                      {blog.description && (
+                        <Text style={[styles.blogDescription, { color: colors.textSecondary }]}>
+                          {blog.description}
+                        </Text>
+                      )}
+                      <Text style={[styles.blogUrl, { color: colors.primary }]}>
+                        {blog.site_url || blog.repo_url}
+                      </Text>
+                      {blog.is_setup_complete === false && (
+                        <View style={styles.setupPendingContainer}>
+                          <Text style={[styles.setupPendingText, { color: colors.warning }]}>
+                            <Ionicons name="time-outline" size={14} color={colors.warning} /> Setup in progress...
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View>
+                  <Text style={{ color: colors.textSecondary, marginBottom: 20 }}>
+                    No blogs yet. Create one below to get started!
+                  </Text>
+                  
+                  <BlogSetup 
+                    onSuccess={handleBlogSuccess}
+                    onError={handleBlogError}
+                    colors={colors}
+                  />
+                </View>
+              )}
             </View>
           ) : (
             <View style={styles.connectContainer}>
@@ -193,5 +302,38 @@ const styles = StyleSheet.create({
   blogUrl: {
     fontSize: 14,
     marginTop: 5,
+  },
+  revokeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 10,
+    marginBottom: 30,
+    alignSelf: 'flex-start',
+  },
+  revokeButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  buttonIcon: {
+    marginRight: 8,
+  },
+  blogDescription: {
+    fontSize: 14,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  setupPendingContainer: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  setupPendingText: {
+    fontSize: 14,
+    fontStyle: 'italic',
   },
 }); 
