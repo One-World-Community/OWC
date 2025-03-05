@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, memo } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Platform, ActivityIndicator, SafeAreaView } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
@@ -272,8 +272,8 @@ export default function DiscoverScreen() {
 
   if (topics.length === 0) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.availableTopicsContainer, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={[styles.container, { backgroundColor: '#ffffff' }]}>
+        <View style={[styles.availableTopicsContainer, { backgroundColor: colors.card }]}>
           <Text style={[styles.availableTopicsSubtitle, { color: colors.textSecondary }]}>
             Select a topic that interests you to see relevant content
           </Text>
@@ -310,12 +310,12 @@ export default function DiscoverScreen() {
             onRefresh={loadTopics}
           />
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: '#ffffff' }]}>
       <View style={[styles.topicsContainer, { 
         backgroundColor: colors.card
       }]}>
@@ -385,7 +385,7 @@ export default function DiscoverScreen() {
       >
         <Ionicons name="add" size={24} color="#fff" />
       </TouchableOpacity>
-    </View>
+    </SafeAreaView>
   );
 }
 
