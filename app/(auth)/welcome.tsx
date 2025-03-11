@@ -2,7 +2,6 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { router } from 'expo-router';
 import { useTheme } from '../../lib/theme';
-import { Ionicons } from '@expo/vector-icons';
 
 export default function WelcomeScreen() {
   const { colors } = useTheme();
@@ -10,10 +9,11 @@ export default function WelcomeScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.logoContainer}>
-        {/* You can replace with your own logo component or image */}
-        <View style={[styles.logoCircle, { backgroundColor: colors.primary }]}>
-          <Ionicons name="globe-outline" size={80} color="white" />
-        </View>
+        <Image 
+          source={require('../../assets/images/icon.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
         
         <Text style={[styles.appName, { color: colors.text }]}>
           OWC Social
@@ -55,12 +55,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 80,
   },
-  logoCircle: {
+  logo: {
     width: 120,
     height: 120,
-    borderRadius: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginBottom: 24,
   },
   appName: {

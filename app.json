@@ -17,6 +17,13 @@
         "NSLocationWhenInUseUsageDescription": "This app uses your location to find nearby events and content relevant to your area.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "This app uses your location to find nearby events and content relevant to your area.",
         "NSLocationAlwaysUsageDescription": "This app uses your location to find nearby events and content relevant to your area."
+      },
+      "icon": "./assets/images/app-icon.png",
+      "supportsTablet": true,
+      "splash": {
+        "image": "./assets/images/splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#ffffff"
       }
     },
     "web": {
@@ -35,9 +42,20 @@
       "startUrl": "/",
       "icons": [
         {
-          "src": "./assets/images/icon.png",
-          "sizes": "1024x1024",
+          "src": "./assets/images/icon-192.png",
+          "sizes": "192x192",
           "type": "image/png"
+        },
+        {
+          "src": "./assets/images/icon-512.png",
+          "sizes": "512x512",
+          "type": "image/png"
+        },
+        {
+          "src": "./assets/images/maskable-icon.png",
+          "sizes": "512x512",
+          "type": "image/png",
+          "purpose": "maskable"
         }
       ]
     },
@@ -49,7 +67,7 @@
       "typedRoutes": true
     },
     "splash": {
-      "image": "./assets/images/icon.png",
+      "image": "./assets/images/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -64,7 +82,8 @@
     "android": {
       "package": "com.oneworldcommunity.oneworldcommunity",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/images/adaptive-icon-foreground.png",
+        "backgroundImage": "./assets/images/adaptive-icon-background.png",
         "backgroundColor": "#ffffff"
       }
     }
