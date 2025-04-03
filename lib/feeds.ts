@@ -102,12 +102,12 @@ function getLinkFromAtom(feed: Element): string {
 }
 
 // Function to discover RSS feeds from a webpage
-export async function discoverFeeds(url: string): Promise<Array<{ url: string; title?: string }>> {
+export async function discoverFeeds(url: string): Promise<{ url: string; title?: string }[]> {
   try {
     const normalizedUrl = url.startsWith('http') ? url : `https://${url.replace(/\/+$/, '')}`;
     const html = await fetchWithCorsProxy(normalizedUrl);
     const $ = cheerioLoad(html);
-    const feeds: Array<{ url: string; title?: string }> = [];
+    const feeds: { url: string; title?: string }[] = [];
 
     // Look for RSS/Atom feed links in the head
     $('link[type*="rss"], link[type*="atom"], link[type*="xml"]').each((_, element) => {

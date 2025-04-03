@@ -17,7 +17,7 @@ export default function AddFeedScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewItems, setPreviewItems] = useState<FeedItem[]>([]);
-  const [discoveredFeeds, setDiscoveredFeeds] = useState<Array<{ url: string; title?: string }>>([]);
+  const [discoveredFeeds, setDiscoveredFeeds] = useState<{ url: string; title?: string }[]>([]);
   const [selectedFeedUrl, setSelectedFeedUrl] = useState<string | null>(null);
 
   // Process the URL parameter if provided when component mounts
