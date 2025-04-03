@@ -1,38 +1,248 @@
-\n\n-- Create custom types\nCREATE TYPE public.feed_status AS ENUM ('active', 'error', 'inactive');
-\n\n-- Profiles table (extends auth.users)\nCREATE TABLE public.profiles (\n  id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,\n  username text UNIQUE,\n  full_name text,\n  avatar_url text,\n  created_at timestamptz DEFAULT now(),\n  updated_at timestamptz DEFAULT now()\n);
-\n\nALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-\n\nCREATE POLICY "Public profiles are viewable by everyone"\n  ON public.profiles\n  FOR SELECT\n  USING (true);
-\n\nCREATE POLICY "Users can update their own profile"\n  ON public.profiles\n  FOR UPDATE\n  USING (auth.uid() = id);
-\n\n-- Topics table\nCREATE TABLE public.topics (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  name text NOT NULL UNIQUE,\n  icon text,\n  description text,\n  created_at timestamptz DEFAULT now()\n);
-\n\nALTER TABLE public.topics ENABLE ROW LEVEL SECURITY;
-\n\nCREATE POLICY "Topics are viewable by everyone"\n  ON public.topics\n  FOR SELECT\n  USING (true);
-\n\n-- User topics table\nCREATE TABLE public.user_topics (\n  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,\n  topic_id uuid REFERENCES public.topics(id) ON DELETE CASCADE,\n  created_at timestamptz DEFAULT now(),\n  PRIMARY KEY (user_id, topic_id)\n);
-\n\nALTER TABLE public.user_topics ENABLE ROW LEVEL SECURITY;
-\n\nCREATE POLICY "Users can view their own topic subscriptions"\n  ON public.user_topics\n  FOR SELECT\n  USING (auth.uid() = user_id);
-\n\nCREATE POLICY "Users can manage their own topic subscriptions"\n  ON public.user_topics\n  FOR ALL\n  USING (auth.uid() = user_id);
-\n\n-- RSS feeds table\nCREATE TABLE public.rss_feeds (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  name text NOT NULL,\n  url text NOT NULL UNIQUE,\n  topic_id uuid REFERENCES public.topics(id),\n  icon_url text,\n  status feed_status DEFAULT 'active',\n  last_fetched_at timestamptz,\n  created_at timestamptz DEFAULT now(),\n  updated_at timestamptz DEFAULT now()\n);
-\n\nALTER TABLE public.rss_feeds ENABLE ROW LEVEL SECURITY;
-\n\nCREATE POLICY "RSS feeds are viewable by everyone"\n  ON public.rss_feeds\n  FOR SELECT\n  USING (true);
-\n\n-- User feeds table\nCREATE TABLE public.user_feeds (\n  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,\n  feed_id uuid REFERENCES public.rss_feeds(id) ON DELETE CASCADE,\n  created_at timestamptz DEFAULT now(),\n  PRIMARY KEY (user_id, feed_id)\n);
-\n\nALTER TABLE public.user_feeds ENABLE ROW LEVEL SECURITY;
-\n\nCREATE POLICY "Users can view their feed subscriptions"\n  ON public.user_feeds\n  FOR SELECT\n  USING (auth.uid() = user_id);
-\n\nCREATE POLICY "Users can manage their feed subscriptions"\n  ON public.user_feeds\n  FOR ALL\n  USING (auth.uid() = user_id);
-\n\n-- Articles table\nCREATE TABLE public.articles (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  feed_id uuid REFERENCES public.rss_feeds(id) ON DELETE CASCADE,\n  title text NOT NULL,\n  url text NOT NULL UNIQUE,\n  description text,\n  image_url text,\n  published_at timestamptz,\n  created_at timestamptz DEFAULT now()\n);
-\n\nALTER TABLE public.articles ENABLE ROW LEVEL SECURITY;
-\n\nCREATE POLICY "Articles are viewable by everyone"\n  ON public.articles\n  FOR SELECT\n  USING (true);
-\n\n-- Events table\nCREATE TABLE public.events (\n  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n  title text NOT NULL,\n  description text,\n  location text NOT NULL,\n  latitude numeric(10, 8),\n  longitude numeric(11, 8),\n  start_time timestamptz NOT NULL,\n  end_time timestamptz,\n  topic_id uuid REFERENCES public.topics(id),\n  image_url text,\n  created_by uuid REFERENCES public.profiles(id),\n  created_at timestamptz DEFAULT now(),\n  updated_at timestamptz DEFAULT now()\n);
-\n\nALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
-\n\nCREATE POLICY "Events are viewable by everyone"\n  ON public.events\n  FOR SELECT\n  USING (true);
-\n\nCREATE POLICY "Authenticated users can create events"\n  ON public.events\n  FOR INSERT\n  TO authenticated\n  WITH CHECK (true);
-\n\nCREATE POLICY "Users can update their own events"\n  ON public.events\n  FOR UPDATE\n  USING (auth.uid() = created_by);
-\n\n-- Insert initial topics\nINSERT INTO public.topics (name, icon, description) VALUES\n  ('Technology', '💻', 'Latest in tech and innovation'),\n  ('Science', '🔬', 'Scientific discoveries and research'),\n  ('Health', '🏥', 'Health and wellness information'),\n  ('Environment', '🌱', 'Environmental news and sustainability'),\n  ('Education', '📚', 'Learning and educational content'),\n  ('Arts', '🎨', 'Art, culture, and creativity'),\n  ('Social Impact', '🤝', 'Social causes and community impact'),\n  ('Innovation', '💡', 'New ideas and breakthrough solutions');
-\n\n-- Insert sample RSS feeds\nINSERT INTO public.rss_feeds (name, url, topic_id, icon_url) \nSELECT \n  'TechCrunch',\n  'https://techcrunch.com/feed',\n  topics.id,\n  'https://images.unsplash.com/photo-1488590528505-98d2b5aba04b?w=100'\nFROM public.topics \nWHERE name = 'Technology';
-\n\nINSERT INTO public.rss_feeds (name, url, topic_id, icon_url)\nSELECT \n  'Environmental News Network',\n  'https://www.enn.com/feed',\n  topics.id,\n  'https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?w=100'\nFROM public.topics \nWHERE name = 'Environment';
-\n\n-- Function to update timestamps\nCREATE OR REPLACE FUNCTION update_updated_at()\nRETURNS TRIGGER AS $$\nBEGIN\n  NEW.updated_at = now();
-\n  RETURN NEW;
-\nEND;
-\n$$ LANGUAGE plpgsql;
-\n\n-- Add updated_at triggers\nCREATE TRIGGER update_profiles_updated_at\n  BEFORE UPDATE ON public.profiles\n  FOR EACH ROW\n  EXECUTE FUNCTION update_updated_at();
-\n\nCREATE TRIGGER update_rss_feeds_updated_at\n  BEFORE UPDATE ON public.rss_feeds\n  FOR EACH ROW\n  EXECUTE FUNCTION update_updated_at();
-\n\nCREATE TRIGGER update_events_updated_at\n  BEFORE UPDATE ON public.events\n  FOR EACH ROW\n  EXECUTE FUNCTION update_updated_at();
+
+
+-- Create custom types
+CREATE TYPE public.feed_status AS ENUM ('active', 'error', 'inactive');
+
+
+-- Profiles table (extends auth.users)
+CREATE TABLE public.profiles (
+  id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  username text UNIQUE,
+  full_name text,
+  avatar_url text,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "Public profiles are viewable by everyone"
+  ON public.profiles
+  FOR SELECT
+  USING (true);
+
+
+CREATE POLICY "Users can update their own profile"
+  ON public.profiles
+  FOR UPDATE
+  USING (auth.uid() = id);
+
+
+-- Topics table
+CREATE TABLE public.topics (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL UNIQUE,
+  icon text,
+  description text,
+  created_at timestamptz DEFAULT now()
+);
+
+
+ALTER TABLE public.topics ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "Topics are viewable by everyone"
+  ON public.topics
+  FOR SELECT
+  USING (true);
+
+
+-- User topics table
+CREATE TABLE public.user_topics (
+  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  topic_id uuid REFERENCES public.topics(id) ON DELETE CASCADE,
+  created_at timestamptz DEFAULT now(),
+  PRIMARY KEY (user_id, topic_id)
+);
+
+
+ALTER TABLE public.user_topics ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "Users can view their own topic subscriptions"
+  ON public.user_topics
+  FOR SELECT
+  USING (auth.uid() = user_id);
+
+
+CREATE POLICY "Users can manage their own topic subscriptions"
+  ON public.user_topics
+  FOR ALL
+  USING (auth.uid() = user_id);
+
+
+-- RSS feeds table
+CREATE TABLE public.rss_feeds (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  url text NOT NULL UNIQUE,
+  topic_id uuid REFERENCES public.topics(id),
+  icon_url text,
+  status feed_status DEFAULT 'active',
+  last_fetched_at timestamptz,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+
+ALTER TABLE public.rss_feeds ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "RSS feeds are viewable by everyone"
+  ON public.rss_feeds
+  FOR SELECT
+  USING (true);
+
+
+-- User feeds table
+CREATE TABLE public.user_feeds (
+  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  feed_id uuid REFERENCES public.rss_feeds(id) ON DELETE CASCADE,
+  created_at timestamptz DEFAULT now(),
+  PRIMARY KEY (user_id, feed_id)
+);
+
+
+ALTER TABLE public.user_feeds ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "Users can view their feed subscriptions"
+  ON public.user_feeds
+  FOR SELECT
+  USING (auth.uid() = user_id);
+
+
+CREATE POLICY "Users can manage their feed subscriptions"
+  ON public.user_feeds
+  FOR ALL
+  USING (auth.uid() = user_id);
+
+
+-- Articles table
+CREATE TABLE public.articles (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  feed_id uuid REFERENCES public.rss_feeds(id) ON DELETE CASCADE,
+  title text NOT NULL,
+  url text NOT NULL UNIQUE,
+  description text,
+  image_url text,
+  published_at timestamptz,
+  created_at timestamptz DEFAULT now()
+);
+
+
+ALTER TABLE public.articles ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "Articles are viewable by everyone"
+  ON public.articles
+  FOR SELECT
+  USING (true);
+
+
+-- Events table
+CREATE TABLE public.events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  title text NOT NULL,
+  description text,
+  location text NOT NULL,
+  latitude numeric(10, 8),
+  longitude numeric(11, 8),
+  start_time timestamptz NOT NULL,
+  end_time timestamptz,
+  topic_id uuid REFERENCES public.topics(id),
+  image_url text,
+  created_by uuid REFERENCES public.profiles(id),
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+
+ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "Events are viewable by everyone"
+  ON public.events
+  FOR SELECT
+  USING (true);
+
+
+CREATE POLICY "Authenticated users can create events"
+  ON public.events
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (true);
+
+
+CREATE POLICY "Users can update their own events"
+  ON public.events
+  FOR UPDATE
+  USING (auth.uid() = created_by);
+
+
+-- Insert initial topics
+INSERT INTO public.topics (name, icon, description) VALUES
+  ('Technology', '💻', 'Latest in tech and innovation'),
+  ('Science', '🔬', 'Scientific discoveries and research'),
+  ('Health', '🏥', 'Health and wellness information'),
+  ('Environment', '🌱', 'Environmental news and sustainability'),
+  ('Education', '📚', 'Learning and educational content'),
+  ('Arts', '🎨', 'Art, culture, and creativity'),
+  ('Social Impact', '🤝', 'Social causes and community impact'),
+  ('Innovation', '💡', 'New ideas and breakthrough solutions');
+
+
+-- Insert sample RSS feeds
+INSERT INTO public.rss_feeds (name, url, topic_id, icon_url) 
+SELECT 
+  'TechCrunch',
+  'https://techcrunch.com/feed',
+  topics.id,
+  'https://images.unsplash.com/photo-1488590528505-98d2b5aba04b?w=100'
+FROM public.topics 
+WHERE name = 'Technology';
+
+
+INSERT INTO public.rss_feeds (name, url, topic_id, icon_url)
+SELECT 
+  'Environmental News Network',
+  'https://www.enn.com/feed',
+  topics.id,
+  'https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?w=100'
+FROM public.topics 
+WHERE name = 'Environment';
+
+
+-- Function to update timestamps
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+
+  RETURN NEW;
+
+END;
+
+$$ LANGUAGE plpgsql;
+
+
+-- Add updated_at triggers
+CREATE TRIGGER update_profiles_updated_at
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at();
+
+
+CREATE TRIGGER update_rss_feeds_updated_at
+  BEFORE UPDATE ON public.rss_feeds
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at();
+
+
+CREATE TRIGGER update_events_updated_at
+  BEFORE UPDATE ON public.events
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at();
 ;

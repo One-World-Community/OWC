@@ -1,0 +1,15 @@
+\n\n-- Enable PostGIS\nCREATE EXTENSION IF NOT EXISTS postgis;
+\n\n-- Add geometry column to events\nALTER TABLE events \nADD COLUMN IF NOT EXISTS location_geom geometry(Point, 4326);
+\n\n-- Create spatial index\nCREATE INDEX IF NOT EXISTS events_location_idx \nON events USING GIST (location_geom);
+\n\n-- Function to update geometry when lat/lng change\nCREATE OR REPLACE FUNCTION update_event_location()\nRETURNS TRIGGER AS $$\nBEGIN\n  IF (NEW.latitude IS NOT NULL AND NEW.longitude IS NOT NULL) THEN\n    NEW.location_geom := ST_SetSRID(ST_MakePoint(NEW.longitude, NEW.latitude), 4326);
+\n  END IF;
+\n  RETURN NEW;
+\nEND;
+\n$$ LANGUAGE plpgsql;
+\n\n-- Trigger to automatically update geometry\nDROP TRIGGER IF EXISTS update_event_location_trigger ON events;
+\nCREATE TRIGGER update_event_location_trigger\n  BEFORE INSERT OR UPDATE OF latitude, longitude\n  ON events\n  FOR EACH ROW\n  EXECUTE FUNCTION update_event_location();
+\n\n-- Function to get formatted location text\nCREATE OR REPLACE FUNCTION get_event_location_text(event_row events)\nRETURNS text AS $$\nBEGIN\n  RETURN event_row.location;
+\nEND;
+\n$$ LANGUAGE plpgsql;
+\n\n-- Update existing events with geometry data\nUPDATE events\nSET location_geom = ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)\nWHERE latitude IS NOT NULL AND longitude IS NOT NULL;
+;

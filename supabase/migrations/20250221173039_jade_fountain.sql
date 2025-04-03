@@ -1,8 +1,95 @@
-\n\n-- Add more RSS feeds (only if they don't exist)\nDO $$\nBEGIN\n  -- Add Science Daily feed\n  IF NOT EXISTS (\n    SELECT 1 FROM public.rss_feeds WHERE url = 'https://www.sciencedaily.com/rss/all.xml'\n  ) THEN\n    INSERT INTO public.rss_feeds (name, url, topic_id, icon_url) \n    SELECT \n      'Science Daily',\n      'https://www.sciencedaily.com/rss/all.xml',\n      topics.id,\n      'https://images.unsplash.com/photo-1507413245164-6160d8298b31?w=100'\n    FROM public.topics \n    WHERE name = 'Science';
-\n  END IF;
-\n\n  -- Add MIT Technology Review feed\n  IF NOT EXISTS (\n    SELECT 1 FROM public.rss_feeds WHERE url = 'https://www.technologyreview.com/feed'\n  ) THEN\n    INSERT INTO public.rss_feeds (name, url, topic_id, icon_url)\n    SELECT \n      'MIT Technology Review',\n      'https://www.technologyreview.com/feed',\n      topics.id,\n      'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=100'\n    FROM public.topics \n    WHERE name = 'Technology';
-\n  END IF;
-\nEND $$;
-\n\n-- Add sample events\nINSERT INTO public.events (\n  title,\n  description,\n  location,\n  latitude,\n  longitude,\n  start_time,\n  end_time,\n  topic_id,\n  image_url\n)\nSELECT\n  'Tech for Good Hackathon',\n  'Join us for a weekend of coding and innovation to create solutions for social impact.',\n  'Innovation Hub, San Francisco',\n  37.7749,\n  -122.4194,\n  NOW() + interval '10 days',\n  NOW() + interval '11 days',\n  topics.id,\n  'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800'\nFROM public.topics\nWHERE name = 'Technology'\nAND NOT EXISTS (\n  SELECT 1 FROM public.events WHERE title = 'Tech for Good Hackathon'\n);
-\n\nINSERT INTO public.events (\n  title,\n  description,\n  location,\n  latitude,\n  longitude,\n  start_time,\n  end_time,\n  topic_id,\n  image_url\n)\nSELECT\n  'Environmental Sustainability Workshop',\n  'Learn practical ways to reduce your carbon footprint and live more sustainably.',\n  'Green Space Center, Seattle',\n  47.6062,\n  -122.3321,\n  NOW() + interval '7 days',\n  NOW() + interval '7 days' + interval '3 hours',\n  topics.id,\n  'https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?w=800'\nFROM public.topics\nWHERE name = 'Environment'\nAND NOT EXISTS (\n  SELECT 1 FROM public.events WHERE title = 'Environmental Sustainability Workshop'\n);
+
+
+-- Add more RSS feeds (only if they don't exist)
+DO $$
+BEGIN
+  -- Add Science Daily feed
+  IF NOT EXISTS (
+    SELECT 1 FROM public.rss_feeds WHERE url = 'https://www.sciencedaily.com/rss/all.xml'
+  ) THEN
+    INSERT INTO public.rss_feeds (name, url, topic_id, icon_url) 
+    SELECT 
+      'Science Daily',
+      'https://www.sciencedaily.com/rss/all.xml',
+      topics.id,
+      'https://images.unsplash.com/photo-1507413245164-6160d8298b31?w=100'
+    FROM public.topics 
+    WHERE name = 'Science';
+
+  END IF;
+
+
+  -- Add MIT Technology Review feed
+  IF NOT EXISTS (
+    SELECT 1 FROM public.rss_feeds WHERE url = 'https://www.technologyreview.com/feed'
+  ) THEN
+    INSERT INTO public.rss_feeds (name, url, topic_id, icon_url)
+    SELECT 
+      'MIT Technology Review',
+      'https://www.technologyreview.com/feed',
+      topics.id,
+      'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=100'
+    FROM public.topics 
+    WHERE name = 'Technology';
+
+  END IF;
+
+END $$;
+
+
+-- Add sample events
+INSERT INTO public.events (
+  title,
+  description,
+  location,
+  latitude,
+  longitude,
+  start_time,
+  end_time,
+  topic_id,
+  image_url
+)
+SELECT
+  'Tech for Good Hackathon',
+  'Join us for a weekend of coding and innovation to create solutions for social impact.',
+  'Innovation Hub, San Francisco',
+  37.7749,
+  -122.4194,
+  NOW() + interval '10 days',
+  NOW() + interval '11 days',
+  topics.id,
+  'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800'
+FROM public.topics
+WHERE name = 'Technology'
+AND NOT EXISTS (
+  SELECT 1 FROM public.events WHERE title = 'Tech for Good Hackathon'
+);
+
+
+INSERT INTO public.events (
+  title,
+  description,
+  location,
+  latitude,
+  longitude,
+  start_time,
+  end_time,
+  topic_id,
+  image_url
+)
+SELECT
+  'Environmental Sustainability Workshop',
+  'Learn practical ways to reduce your carbon footprint and live more sustainably.',
+  'Green Space Center, Seattle',
+  47.6062,
+  -122.3321,
+  NOW() + interval '7 days',
+  NOW() + interval '7 days' + interval '3 hours',
+  topics.id,
+  'https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?w=800'
+FROM public.topics
+WHERE name = 'Environment'
+AND NOT EXISTS (
+  SELECT 1 FROM public.events WHERE title = 'Environmental Sustainability Workshop'
+);
 ;
