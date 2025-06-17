@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import { Link, router } from 'expo-router';
 import { useAuth } from '../../lib/auth';
 import { useTheme } from '../../lib/theme';
@@ -16,65 +16,67 @@ export default function SignUpScreen() {
       await signUp(email, password);
       router.replace('/(tabs)');
     } catch (err) {
-      setError('Error creating account');
+      setError(err instanceof Error ? err.message : 'Failed to create account. Please try again.');
     }
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.card, { backgroundColor: colors.card }]}>
-        <Text style={[styles.title, { color: colors.text }]}>Create Account</Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Join OWC Social
-        </Text>
-
-        {error ? (
-          <Text style={[styles.error, { color: colors.error }]}>{error}</Text>
-        ) : null}
-
-        <TextInput
-          style={[styles.input, { 
-            backgroundColor: colors.background,
-            borderColor: colors.border,
-            color: colors.text
-          }]}
-          placeholder="Email"
-          placeholderTextColor={colors.textSecondary}
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-        />
-
-        <TextInput
-          style={[styles.input, { 
-            backgroundColor: colors.background,
-            borderColor: colors.border,
-            color: colors.text
-          }]}
-          placeholder="Password"
-          placeholderTextColor={colors.textSecondary}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-        />
-
-        <TouchableOpacity 
-          style={[styles.button, { backgroundColor: colors.primary }]}
-          onPress={handleSignUp}>
-          <Text style={[styles.buttonText, { color: colors.card }]}>Sign Up</Text>
-        </TouchableOpacity>
-
-        <View style={styles.footer}>
-          <Text style={[styles.footerText, { color: colors.textSecondary }]}>
-            Already have an account?{' '}
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.card, { backgroundColor: colors.card }]}>
+          <Text style={[styles.title, { color: colors.text }]}>Create Account</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+            Join OWC Social
           </Text>
-          <Link href="/sign-in" style={[styles.link, { color: colors.primary }]}>
-            Sign In
-          </Link>
+
+          {error ? (
+            <Text style={[styles.error, { color: colors.error }]}>{error}</Text>
+          ) : null}
+
+          <TextInput
+            style={[styles.input, { 
+              backgroundColor: colors.background,
+              borderColor: colors.border,
+              color: colors.text
+            }]}
+            placeholder="Email"
+            placeholderTextColor={colors.textSecondary}
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+
+          <TextInput
+            style={[styles.input, { 
+              backgroundColor: colors.background,
+              borderColor: colors.border,
+              color: colors.text
+            }]}
+            placeholder="Password"
+            placeholderTextColor={colors.textSecondary}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
+
+          <TouchableOpacity 
+            style={[styles.button, { backgroundColor: colors.primary }]}
+            onPress={handleSignUp}>
+            <Text style={[styles.buttonText, { color: colors.card }]}>Sign Up</Text>
+          </TouchableOpacity>
+
+          <View style={styles.footer}>
+            <Text style={[styles.footerText, { color: colors.textSecondary }]}>
+              Already have an account?{' '}
+            </Text>
+            <Link href="/sign-in" style={[styles.link, { color: colors.primary }]}>
+              Sign In
+            </Link>
+          </View>
         </View>
       </View>
-    </View>
+    </TouchableWithoutFeedback>
   );
 }
 
