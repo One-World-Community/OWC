@@ -1,14 +1,17 @@
 import React, { useEffect, useRef } from 'react';
 import { Modal, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../../../lib/theme';
 import { MapModalProps } from './MapModal';
 
 // Define types for Leaflet since we're using require instead of import
 type LeafletMap = any;
 type LeafletMarker = any;
 
+// Leaflet's CSS is now included in index.html
+
 export default function MapModal({
-  visible,
+  isVisible,
   onClose,
   onConfirm,
   mapRegion,
@@ -24,107 +27,88 @@ export default function MapModal({
 
   // Set up the Leaflet map when the modal becomes visible
   useEffect(() => {
-    if (!visible) return;
-
-    const initializeLeafletMap = async () => {
-      try {
-        // Use require instead of dynamic imports to avoid TypeScript module issues
+    if (isVisible && Platform.OS === 'web' && webMapRef.current) {
+      setTimeout(() => {
         if (!leafletRef.current) {
           leafletRef.current = require('leaflet');
-          // Load the CSS
-          require('leaflet/dist/leaflet.css');
+          // require('leaflet/dist/leaflet.css');
         }
         
         const L = leafletRef.current;
-
-        if (!webMapRef.current) {
-          // If map container doesn't exist yet, wait for it
-          setTimeout(initializeLeafletMap, 100);
-          return;
-        }
-
-        // Create new map
-        const initialLat = initialCoordinates?.latitude || mapRegion.latitude;
-        const initialLng = initialCoordinates?.longitude || mapRegion.longitude;
         
-        const map = L.map('web-map-container').setView(
-          [initialLat, initialLng],
-          13
-        );
-        
-        mapInstanceRef.current = map;
-
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
-
-        // Add a marker at the initial position
-        const marker = L.marker([initialLat, initialLng], {
-          draggable: true
-        }).addTo(map);
-        
-        webMarkerRef.current = marker;
-
-        // Get address on marker drag end
-        marker.on('dragend', async function() {
-          const position = marker.getLatLng();
-          try {
-            const response = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.lat}&lon=${position.lng}&zoom=18&addressdetails=1`
-            );
-            const data = await response.json();
-            if (data && data.display_name) {
-              setLocationSearchText(data.display_name);
-            }
-          } catch (err) {
-            console.error('Error getting address:', err);
-          }
-        });
-
-        // Handle map clicks to move marker
-        map.on('click', async function(e: { latlng: { lat: number; lng: number } }) {
-          const { lat, lng } = e.latlng;
-          marker.setLatLng([lat, lng]);
+        if (!mapInstanceRef.current) {
+          const map = L.map(webMapRef.current).setView([51.505, -0.09], 13);
           
-          try {
-            const response = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
-            );
-            const data = await response.json();
-            if (data && data.display_name) {
-              setLocationSearchText(data.display_name);
+          mapInstanceRef.current = map;
+
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+          }).addTo(map);
+
+          // Add a marker at the initial position
+          const marker = L.marker([51.505, -0.09], {
+            draggable: true
+          }).addTo(map);
+          
+          webMarkerRef.current = marker;
+
+          // Get address on marker drag end
+          marker.on('dragend', async function() {
+            const position = marker.getLatLng();
+            try {
+              const response = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.lat}&lon=${position.lng}&zoom=18&addressdetails=1`
+              );
+              const data = await response.json();
+              if (data && data.display_name) {
+                setLocationSearchText(data.display_name);
+              }
+            } catch (err) {
+              console.error('Error getting address:', err);
             }
-          } catch (err) {
-            console.error('Error getting address:', err);
-          }
-        });
+          });
 
-        // Set up search control event handling
-        const setupSearchControl = () => {
-          const searchControl = document.getElementById('web-map-search');
-          if (searchControl) {
-            searchControl.addEventListener('keypress', handleSearchKeyPress);
-          } else {
-            // Try again if the search control isn't available yet
-            setTimeout(setupSearchControl, 100);
-          }
-        };
+          // Handle map clicks to move marker
+          map.on('click', async function(e: { latlng: { lat: number; lng: number } }) {
+            const { lat, lng } = e.latlng;
+            marker.setLatLng([lat, lng]);
+            
+            try {
+              const response = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
+              );
+              const data = await response.json();
+              if (data && data.display_name) {
+                setLocationSearchText(data.display_name);
+              }
+            } catch (err) {
+              console.error('Error getting address:', err);
+            }
+          });
 
-        setupSearchControl();
+          // Set up search control event handling
+          const setupSearchControl = () => {
+            const searchControl = document.getElementById('web-map-search');
+            if (searchControl) {
+              searchControl.addEventListener('keypress', handleSearchKeyPress);
+            } else {
+              // Try again if the search control isn't available yet
+              setTimeout(setupSearchControl, 100);
+            }
+          };
 
-        return () => {
-          if (mapInstanceRef.current) {
-            mapInstanceRef.current.remove();
-            mapInstanceRef.current = null;
-          }
-        };
-      } catch (error) {
-        console.error('Error initializing Leaflet map:', error);
-      }
-    };
+          setupSearchControl();
 
-    initializeLeafletMap();
-  }, [visible, initialCoordinates, mapRegion.latitude, mapRegion.longitude]);
+          return () => {
+            if (mapInstanceRef.current) {
+              mapInstanceRef.current.remove();
+              mapInstanceRef.current = null;
+            }
+          };
+        }
+      }, 100);
+    }
+  }, [isVisible, initialCoordinates, mapRegion.latitude, mapRegion.longitude]);
 
   const handleSearchKeyPress = async (e: KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -187,7 +171,7 @@ export default function MapModal({
     <Modal
       animationType="slide"
       transparent={false}
-      visible={visible}
+      visible={isVisible}
       onRequestClose={onClose}>
       <div style={{
         position: 'fixed',
