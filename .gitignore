@@ -37,3 +37,6 @@ yarn-error.*
 /android
 *.ipa
 /.vscode
+
+# credentials
+google-service-account.json

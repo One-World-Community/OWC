@@ -11,7 +11,10 @@
     "deploy": "gh-pages -d dist",
     "lint": "expo lint",
     "android": "expo run:android",
-    "ios": "expo run:ios"
+    "ios": "expo run:ios",
+    "build:android": "bunx eas-cli build --platform android --profile production",
+    "submit:android": "bunx eas-cli submit --platform android --profile production",
+    "publish:android": "bun run build:android && bun run submit:android"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.0.4",
