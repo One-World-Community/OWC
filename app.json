@@ -29,6 +29,7 @@
       "bundler": "metro",
       "output": "static",
       "favicon": "./assets/images/favicon.png",
+      "indexHtml": "index.html",
       "name": "OWC Social",
       "shortName": "OWC Social",
       "description": "Explore your interests with OWC Social",
