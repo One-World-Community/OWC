@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Keyboard, TouchableWithoutFeedback } from 'react-native';
-import { Link, router } from 'expo-router';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ScrollView, Platform } from 'react-native';
+import { router } from 'expo-router';
 import { useAuth } from '../../lib/auth';
 import { useTheme } from '../../lib/theme';
 
@@ -21,76 +21,79 @@ export default function SignInScreen() {
   };
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.logoContainer}>
-          <Image
-            source={require('../../assets/images/icon.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-        </View>
-        
-        <View style={[styles.card, { backgroundColor: colors.card }]}>
-          <Text style={[styles.title, { color: colors.text }]}>Welcome Back</Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Sign in to your account
+    <ScrollView
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.logoContainer}>
+        <Image
+          source={require('../../assets/images/icon.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+      </View>
+      
+      <View style={[styles.card, { backgroundColor: colors.card }]}>
+        <Text style={[styles.title, { color: colors.text }]}>Welcome Back</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          Sign in to your account
+        </Text>
+
+        {error ? (
+          <Text style={[styles.error, { color: colors.error }]}>{error}</Text>
+        ) : null}
+
+        <TextInput
+          style={[styles.input, { 
+            backgroundColor: colors.background,
+            borderColor: colors.border,
+            color: colors.text
+          }]}
+          placeholder="Email"
+          placeholderTextColor={colors.textSecondary}
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
+        />
+
+        <TextInput
+          style={[styles.input, { 
+            backgroundColor: colors.background,
+            borderColor: colors.border,
+            color: colors.text
+          }]}
+          placeholder="Password"
+          placeholderTextColor={colors.textSecondary}
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+        />
+
+        <TouchableOpacity 
+          style={[styles.button, { backgroundColor: colors.primary }]}
+          onPress={handleSignIn}>
+          <Text style={[styles.buttonText, { color: colors.card }]}>Sign In</Text>
+        </TouchableOpacity>
+
+        <View style={styles.footer}>
+          <Text style={[styles.footerText, { color: colors.textSecondary }]}>
+            Don't have an account?{' '}
           </Text>
-
-          {error ? (
-            <Text style={[styles.error, { color: colors.error }]}>{error}</Text>
-          ) : null}
-
-          <TextInput
-            style={[styles.input, { 
-              backgroundColor: colors.background,
-              borderColor: colors.border,
-              color: colors.text
-            }]}
-            placeholder="Email"
-            placeholderTextColor={colors.textSecondary}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-
-          <TextInput
-            style={[styles.input, { 
-              backgroundColor: colors.background,
-              borderColor: colors.border,
-              color: colors.text
-            }]}
-            placeholder="Password"
-            placeholderTextColor={colors.textSecondary}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
-
-          <TouchableOpacity 
-            style={[styles.button, { backgroundColor: colors.primary }]}
-            onPress={handleSignIn}>
-            <Text style={[styles.buttonText, { color: colors.card }]}>Sign In</Text>
+          <TouchableOpacity onPress={() => router.push('/sign-up')}>
+            <Text style={[styles.link, { color: colors.primary }]}>Sign Up</Text>
           </TouchableOpacity>
-
-          <View style={styles.footer}>
-            <Text style={[styles.footerText, { color: colors.textSecondary }]}>
-              Don't have an account?{' '}
-            </Text>
-            <Link href="/sign-up" style={[styles.link, { color: colors.primary }]}>
-              Sign Up
-            </Link>
-          </View>
         </View>
       </View>
-    </TouchableWithoutFeedback>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     padding: 20,
   },
