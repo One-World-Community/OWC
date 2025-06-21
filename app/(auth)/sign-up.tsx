@@ -21,7 +21,7 @@ export default function SignUpScreen() {
   };
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.card, { backgroundColor: colors.card }]}>
           <Text style={[styles.title, { color: colors.text }]}>Create Account</Text>
