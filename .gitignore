@@ -36,6 +36,7 @@ yarn-error.*
 /ios
 /android
 *.ipa
+*.aab
 /.vscode
 
 # credentials
