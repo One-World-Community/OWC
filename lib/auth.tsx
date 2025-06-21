@@ -27,24 +27,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
-      
-      if (!session) {
-        router.replace('/(auth)/welcome');
-      } else {
-        router.replace('/(tabs)');
-      }
     });
 
     supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       
-      if (!session) {
-        router.replace('/(auth)/welcome');
-      } else {
-        router.replace('/(tabs)');
+      // Only navigate when auth state changes, not on initial load
+      if (!loading) {
+        if (!session) {
+          router.replace('/(auth)/welcome');
+        } else {
+          router.replace('/(tabs)');
+        }
       }
     });
-  }, []);
+  }, [loading]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
