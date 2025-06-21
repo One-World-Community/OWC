@@ -4,21 +4,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Database } from './database.types';
 import { useMemo } from 'react';
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
 
 // A simple in-memory storage for server-side rendering
 const inMemoryStorage = {
-  getItem: (key: string) => {
-    return null;
-  },
+  getItem: (key: string) => null,
   setItem: (key: string, value: string) => {},
   removeItem: (key: string) => {},
 };
 
-// Use in-memory storage if not on web or native platforms
-const storage = Platform.OS === 'web' || Platform.OS === 'ios' || Platform.OS === 'android'
-  ? AsyncStorage
-  : inMemoryStorage;
+// Use in-memory storage if window is not defined (i.e., on the server)
+const storage = typeof window !== 'undefined' ? AsyncStorage : inMemoryStorage;
 
 // Initialize Supabase client
 const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || process.env.EXPO_PUBLIC_SUPABASE_URL || '';
