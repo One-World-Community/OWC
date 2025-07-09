@@ -3,6 +3,7 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "homepage": "https://app.theoneworldcommunity.org",
   "scripts": {
     "dev": "EXPO_NO_TELEMETRY=1 expo start",
