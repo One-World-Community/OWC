@@ -41,3 +41,6 @@ yarn-error.*
 
 # credentials
 google-service-account.json
+
+# dotfiles/folders
+.*
