@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
-import { router } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../lib/auth';
 import { useTheme } from '../../lib/theme';
@@ -11,8 +11,10 @@ export default function ManageTopicsScreen() {
   const { session } = useAuth();
   const { colors } = useTheme();
   const [allTopics, setAllTopics] = useState<Topic[]>([]);
-  const [subscribedTopicIds, setSubscribedTopicIds] = useState<Set<string>>(new Set());
+  const [initialTopicIds, setInitialTopicIds] = useState<Set<string>>(new Set());
+  const [selectedTopicIds, setSelectedTopicIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -27,7 +29,9 @@ export default function ManageTopicsScreen() {
         getUserTopics(session!.user.id),
       ]);
       setAllTopics(topics);
-      setSubscribedTopicIds(new Set(userTopics.map(t => t.id)));
+      const initialIds = new Set(userTopics.map(t => t.id));
+      setInitialTopicIds(initialIds);
+      setSelectedTopicIds(new Set(initialIds));
     } catch (err) {
       console.error('Failed to load topics:', err);
       setError('Failed to load topics');
@@ -36,26 +40,113 @@ export default function ManageTopicsScreen() {
     }
   };
 
-  const toggleTopic = async (topicId: string) => {
-    try {
-      if (subscribedTopicIds.has(topicId)) {
-        await unsubscribeTopic(session!.user.id, topicId);
-        setSubscribedTopicIds(prev => {
-          const next = new Set(prev);
-          next.delete(topicId);
-          return next;
-        });
+  const toggleTopic = (topicId: string) => {
+    setSelectedTopicIds(prev => {
+      const next = new Set(prev);
+      if (next.has(topicId)) {
+        next.delete(topicId);
       } else {
-        await subscribeTopic(session!.user.id, topicId);
-        setSubscribedTopicIds(prev => new Set([...prev, topicId]));
+        next.add(topicId);
       }
+      return next;
+    });
+  };
+
+  const handleCancel = () => {
+    router.back();
+  };
+
+  const hasChanges = useMemo(() => {
+    if (initialTopicIds.size !== selectedTopicIds.size) return true;
+    for (const id of initialTopicIds) {
+      if (!selectedTopicIds.has(id)) return true;
+    }
+    return false;
+  }, [initialTopicIds, selectedTopicIds]);
+
+  const handleDone = async () => {
+    if (!session?.user) return;
+    if (!hasChanges) {
+      router.back();
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const toSubscribe: string[] = [];
+      const toUnsubscribe: string[] = [];
+
+      selectedTopicIds.forEach(id => {
+        if (!initialTopicIds.has(id)) {
+          toSubscribe.push(id);
+        }
+      });
+
+      initialTopicIds.forEach(id => {
+        if (!selectedTopicIds.has(id)) {
+          toUnsubscribe.push(id);
+        }
+      });
+
+      await Promise.all([
+        Promise.all(toSubscribe.map(id => subscribeTopic(session.user.id, id))),
+        Promise.all(toUnsubscribe.map(id => unsubscribeTopic(session.user.id, id))),
+      ]);
+
+      setInitialTopicIds(new Set(selectedTopicIds));
+      router.back();
     } catch (err) {
-      console.error('Failed to toggle topic subscription:', err);
+      console.error('Failed to save topic changes:', err);
+      setError('Failed to save changes');
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <Stack.Screen
+        options={{
+          headerLeft: () => (
+            <TouchableOpacity
+              onPress={handleCancel}
+              style={styles.headerButton}
+            >
+              <Ionicons
+                name="chevron-back"
+                size={22}
+                color={colors.primary}
+              />
+              <Text
+                style={[styles.headerButtonText, { color: colors.primary }]}
+              >
+                Back
+              </Text>
+            </TouchableOpacity>
+          ),
+          headerRight: () => (
+            <TouchableOpacity
+              onPress={handleDone}
+              style={styles.headerButton}
+              disabled={saving || !hasChanges}
+            >
+              <Text
+                style={[
+                  styles.headerButtonText,
+                  {
+                    color:
+                      saving || !hasChanges
+                        ? colors.textSecondary
+                        : colors.primary,
+                  },
+                ]}
+              >
+                Done
+              </Text>
+            </TouchableOpacity>
+          ),
+        }}
+      />
       {error ? (
         <View style={styles.errorContainer}>
           <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
@@ -73,7 +164,7 @@ export default function ManageTopicsScreen() {
               style={[
                 styles.topicCard,
                 { backgroundColor: colors.card },
-                subscribedTopicIds.has(item.id) && [
+                selectedTopicIds.has(item.id) && [
                   styles.topicCardSelected,
                   { borderColor: colors.primary }
                 ]
@@ -91,9 +182,9 @@ export default function ManageTopicsScreen() {
                 </View>
               </View>
               <Ionicons
-                name={subscribedTopicIds.has(item.id) ? "checkmark-circle" : "add-circle-outline"}
+                name={selectedTopicIds.has(item.id) ? "checkmark-circle" : "add-circle-outline"}
                 size={24}
-                color={subscribedTopicIds.has(item.id) ? colors.primary : colors.textSecondary}
+                color={selectedTopicIds.has(item.id) ? colors.primary : colors.textSecondary}
               />
             </TouchableOpacity>
           )}
@@ -166,5 +257,16 @@ const styles = StyleSheet.create({
   retryButtonText: {
     fontSize: 16,
     fontWeight: '500',
+  },
+  headerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  headerButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 4,
   },
 });
