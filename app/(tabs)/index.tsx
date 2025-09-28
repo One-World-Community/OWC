@@ -51,6 +51,8 @@ const ArticleCard = memo(({
   </TouchableOpacity>
 ));
 
+ArticleCard.displayName = 'ArticleCard';
+
 // Memoized Topic Button component
 const TopicButton = memo(({ 
   item, 
@@ -79,6 +81,8 @@ const TopicButton = memo(({
   </TouchableOpacity>
 ));
 
+TopicButton.displayName = 'TopicButton';
+
 export default function DiscoverScreen() {
   const { session } = useAuth();
   const { colors } = useTheme();
@@ -88,108 +92,69 @@ export default function DiscoverScreen() {
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const userId = session?.user?.id;
 
-  // Load topics when session changes
-  useEffect(() => {
-    if (session?.user) {
-      loadTopics();
-    }
-  }, [session]);
-
-  // Load initial feeds when component mounts and session is available
-  useEffect(() => {
-    if (session?.user) {
-      setLoading(true);
-      loadFeeds();
-    }
-  }, [session]); // Only depend on session, not on selectedTopic or showMyFeeds
-
-  // Handle feed updates when selection changes
-  useEffect(() => {
-    if (session?.user) {
-      setFeedItems([]); // Clear current items immediately
-      setLoading(true); // Show loading state right away
-      loadFeeds();
-    }
-  }, [selectedTopic, showMyFeeds]);
-
-  const loadTopics = async () => {
+  const loadTopics = useCallback(async () => {
     try {
-      if (session?.user) {
-        const userTopics = await getUserTopics(session.user.id);
-        setTopics(userTopics);
-      }
+      if (!userId) return;
+      const userTopics = await getUserTopics(userId);
+      setTopics(userTopics);
     } catch (err) {
       console.error('Failed to load topics:', err);
     }
-  };
+  }, [userId]);
 
-  const loadFeeds = async () => {
+  const loadFeeds = useCallback(async () => {
     try {
-      if (session?.user) {
-        let selectedFeeds = [];
-        
-        if (showMyFeeds) {
-          // Load feeds the user is directly subscribed to
-          const userFeeds = await getUserFeeds(session.user.id);
-          selectedFeeds = userFeeds;
-        } else {
-          // Load feeds from selected topic or all topic feeds
-          const topicFeeds = await getUserTopicFeeds(session.user.id);
-          
-          // Safely extract feeds considering the topic structure
-          selectedFeeds = topicFeeds
-            .filter(tf => {
-              // Check if topic exists and has an id, and whether it matches selected topic if one is selected
-              return tf.topic && 
-                     'id' in tf.topic && 
-                     (!selectedTopic || selectedTopic === tf.topic.id);
-            })
-            .flatMap(tf => 'feeds' in tf ? tf.feeds : []);
-        }
+      if (!userId) return;
+      let selectedFeeds = [];
 
-        const allItems: FeedItem[] = [];
-        const feedErrors: string[] = [];
+      if (showMyFeeds) {
+        const userFeeds = await getUserFeeds(userId);
+        selectedFeeds = userFeeds;
+      } else {
+        const topicFeeds = await getUserTopicFeeds(userId);
+        selectedFeeds = topicFeeds
+          .filter(tf => tf.topic && 'id' in tf.topic && (!selectedTopic || selectedTopic === tf.topic.id))
+          .flatMap(tf => ('feeds' in tf ? tf.feeds : []));
+      }
 
-        // Load feeds in smaller batches to improve performance
-        const batchSize = 5;
-        for (let i = 0; i < selectedFeeds.length; i += batchSize) {
-          const batch = selectedFeeds.slice(i, i + batchSize);
-          
-          // Process batch in parallel
-          const batchPromises = batch.map(async (feed) => {
-            try {
-              const items = await fetchFeedItems(feed);
-              return items;
-            } catch (err) {
-              console.error('Error fetching feed', feed.url, ':', err);
-              feedErrors.push(feed.name);
-              return [];
-            }
-          });
-          
-          const batchResults = await Promise.all(batchPromises);
-          batchResults.forEach(items => allItems.push(...items));
-        }
+      const allItems: FeedItem[] = [];
+      const feedErrors: string[] = [];
 
-        // Sort by date, newest first
-        allItems.sort((a, b) => {
-          const dateA = a.isoDate ? new Date(a.isoDate) : new Date(0);
-          const dateB = b.isoDate ? new Date(b.isoDate) : new Date(0);
-          return dateB.getTime() - dateA.getTime();
+      const batchSize = 5;
+      for (let i = 0; i < selectedFeeds.length; i += batchSize) {
+        const batch = selectedFeeds.slice(i, i + batchSize);
+        const batchPromises = batch.map(async (feed) => {
+          try {
+            const items = await fetchFeedItems(feed);
+            return items;
+          } catch (err) {
+            console.error('Error fetching feed', feed.url, ':', err);
+            feedErrors.push(feed.name);
+            return [];
+          }
         });
 
-        setFeedItems(allItems);
-        
-        // Only show error if all feeds failed
-        if (feedErrors.length === selectedFeeds.length && selectedFeeds.length > 0) {
-          setError('Unable to load feeds. Please try again.');
-        } else if (feedErrors.length > 0) {
-          console.warn('Some feeds failed to load:', feedErrors.join(', '));
-          setError(null);
-        } else {
-          setError(null);
-        }
+        const batchResults = await Promise.all(batchPromises);
+        batchResults.forEach(items => allItems.push(...items));
+      }
+
+      allItems.sort((a, b) => {
+        const dateA = a.isoDate ? new Date(a.isoDate) : new Date(0);
+        const dateB = b.isoDate ? new Date(b.isoDate) : new Date(0);
+        return dateB.getTime() - dateA.getTime();
+      });
+
+      setFeedItems(allItems);
+
+      if (feedErrors.length === selectedFeeds.length && selectedFeeds.length > 0) {
+        setError('Unable to load feeds. Please try again.');
+      } else if (feedErrors.length > 0) {
+        console.warn('Some feeds failed to load:', feedErrors.join(', '));
+        setError(null);
+      } else {
+        setError(null);
       }
     } catch (err) {
       setError('Failed to load feeds');
@@ -197,7 +162,18 @@ export default function DiscoverScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId, showMyFeeds, selectedTopic]);
+
+  useEffect(() => {
+    loadTopics();
+  }, [loadTopics]);
+
+  useEffect(() => {
+    if (!userId) return;
+    setFeedItems([]);
+    setLoading(true);
+    loadFeeds();
+  }, [userId, loadFeeds]);
 
   const handleArticlePress = useCallback(async (url: string) => {
     try {
